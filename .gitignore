@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project data (runtime state)
+data/
+!data/.gitkeep
+
+# Config secrets
+configs/production/*.yaml
+!configs/production/config.yaml.template
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.template
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Docker
+docker/data/

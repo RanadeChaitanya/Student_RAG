@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suraj Dada — JEE Tutor MVP</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f7fa;color:#1a1a2e;padding:20px}
+.container{max-width:1100px;margin:0 auto}
+header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:24px 32px;border-radius:12px;margin-bottom:24px}
+header h1{font-size:24px;margin-bottom:4px}
+header p{opacity:.8;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:24px}
+.card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card h3{font-size:15px;margin-bottom:12px;color:#1a1a2e;border-bottom:2px solid #e8e8ef;padding-bottom:8px}
+select,input,button{font-size:14px;padding:8px 12px;border:1px solid #d0d5dd;border-radius:6px;width:100%;margin-bottom:8px}
+button{background:#1a1a2e;color:#fff;border:none;cursor:pointer;font-weight:600}
+button:hover{background:#16213e}
+button.secondary{background:#6c757d}
+button.secondary:hover{background:#5a6268}
+select{background:#fff}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{margin-bottom:0}
+.w-full{width:100%}
+pre{background:#f8f9fa;border-radius:6px;padding:12px;font-size:13px;overflow-x:auto;margin-top:8px;max-height:400px;overflow-y:auto}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;margin:1px}
+.badge.green{background:#d4edda;color:#155724}
+.badge.yellow{background:#fff3cd;color:#856404}
+.badge.red{background:#f8d7da;color:#721c24}
+.badge.blue{background:#d1ecf1;color:#0c5460}
+.stat{display:flex;justify-content:space-between;padding:4px 0;font-size:14px;border-bottom:1px solid #f0f0f5}
+.empty{text-align:center;color:#999;padding:20px;font-size:14px}
+.mt-8{margin-top:8px}
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tabs button{flex:1;padding:6px;font-size:13px;background:#e8e8ef;color:#1a1a2e}
+.tabs button.active{background:#1a1a2e;color:#fff}
+.hidden{display:none}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee}
+th{font-weight:600;color:#555}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Suraj Dada</h1>
+<p>AI-powered adaptive JEE tutoring — MVP Dashboard</p>
+</header>
+
+<div class="grid">
+<div class="card">
+<h3>Select Student</h3>
+<select id="studentSelect"><option value="">Loading students...</option></select>
+<button id="loadMastery" class="secondary w-full mt-8">Load Mastery</button>
+<h3 style="margin-top:16px">Quick Actions</h3>
+<button id="btnDiagnose" class="secondary w-full">Diagnose Mistake</button>
+<button id="btnPractice" class="secondary w-full">Generate Practice</button>
+<button id="btnAnalytics" class="secondary w-full">View Analytics</button>
+</div>
+
+<div class="card" id="masteryCard">
+<h3>Mastery Summary</h3>
+<div id="masteryContent"><div class="empty">Select a student and click "Load Mastery"</div></div>
+</div>
+</div>
+
+<div id="outputArea">
+<div class="card">
+<div class="tabs">
+<button class="active" data-tab="diagnosis">Diagnosis</button>
+<button data-tab="practice">Practice</button>
+<button data-tab="analytics">Analytics</button>
+</div>
+<pre id="tabContent">Select a student and use the buttons to test features.</pre>
+</div>
+</div>
+</div>
+
+<script>
+const BASE = "http://127.0.0.1:8000";
+let currentStudentId = null;
+let students = [];
+
+const $ = id => document.getElementById(id);
+const tabContent = $("tabContent");
+
+async function api(method, path, body) {
+const opts = {method, headers:{"Content-Type":"application/json"}};
+if (body) opts.body = JSON.stringify(body);
+const r = await fetch(BASE + path, opts);
+const text = await r.text();
+try { return {status:r.status, data:JSON.parse(text)}; }
+catch { return {status:r.status, data:text}; }
+}
+
+function formatJSON(obj) {
+return JSON.stringify(obj, null, 2).replace(/("(?:[^"\\]|\\.)*"|\b\d+\.?\d*\b|true|false|null)/g, m => {
+if (m.startsWith('"') && m.endsWith('"')) return `<span style="color:#0c5460">${m}</span>`;
+if (/^\d/.test(m)) return `<span style="color:#721c24">${m}</span>`;
+return `<span style="color:#856404">${m}</span>`;
+});
+}
+
+function showTab(tab) {
+document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+}
+
+document.querySelector(".tabs").addEventListener("click", e => {
+const btn = e.target.closest("button");
+if (btn) showTab(btn.dataset.tab);
+});
+
+function appendOutput(label, data, tab = "diagnosis") {
+const h = `<div style="margin-bottom:8px;font-weight:600;color:#1a1a2e">▶ ${label}</div>`;
+const c = `<div style="margin-bottom:12px">${formatJSON(data)}</div>`;
+if (tabContent.innerHTML === "Select a student and use the buttons to test features.") tabContent.innerHTML = "";
+tabContent.innerHTML += h + c;
+showTab(tab);
+}
+
+async function loadStudents() {
+const r = await api("GET", "/api/v1/students/");
+if (r.status === 200) {
+students = r.data;
+const sel = $("studentSelect");
+sel.innerHTML = `<option value="">-- Select student --</option>` + r.data.map(s =>
+`<option value="${s.id}">${s.name} (Grade ${s.grade}, ${s.exam_target})</option>`
+).join("");
+if (r.data.length > 0) { sel.value = r.data[0].id; currentStudentId = r.data[0].id; }
+}
+}
+loadStudents();
+
+$("studentSelect").addEventListener("change", e => {
+currentStudentId = e.target.value || null;
+});
+
+$("loadMastery").addEventListener("click", async () => {
+if (!currentStudentId) return;
+const r = await api("GET", `/api/v1/students/${currentStudentId}/mastery`);
+if (r.status === 200) {
+const d = r.data;
+let html = `<div class="stat"><span>Overall Score</span><strong>${d.overall_score?.toFixed(1) ?? "N/A"}</strong></div>`;
+if (d.subject_breakdown) {
+html += `<div style="margin-top:8px;font-weight:600;font-size:13px">By Subject</div>`;
+for (const [subj, score] of Object.entries(d.subject_breakdown)) {
+html += `<div class="stat"><span>${subj}</span><strong>${typeof score === 'number' ? score.toFixed(1) : score}</strong></div>`;
+}
+}
+if (d.weak_topics?.length) {
+html += `<div style="margin-top:8px;font-weight:600;font-size:13px;color:#721c24">Weak Topics</div>`;
+d.weak_topics.forEach(w => {
+html += `<div class="stat"><span>${w.subtopic || w.topic || w.subject}</span><span class="badge ${w.score < 40 ? 'red' : 'yellow'}">${w.score?.toFixed(0) ?? '?'}</span></div>`;
+});
+}
+if (d.strengths?.length) {
+html += `<div style="margin-top:8px;font-weight:600;font-size:13px;color:#155724">Strengths</div>`;
+d.strengths.forEach(s => html += `<span class="badge green">${s}</span> `);
+}
+$("masteryContent").innerHTML = html;
+appendOutput("Mastery Summary", d);
+}
+});
+
+$("btnDiagnose").addEventListener("click", async () => {
+if (!currentStudentId) return;
+const r = await api("POST", "/api/v1/diagnosis/diagnose", {
+student_id: currentStudentId, question_id: 1, question_type: "app",
+response_text: "B", response_time_seconds: 60, hints_used: 2, session_id: "web-ui"
+});
+appendOutput("Diagnosis Result", r.data, "diagnosis");
+});
+
+$("btnPractice").addEventListener("click", async () => {
+if (!currentStudentId) return;
+const r = await api("POST", "/api/v1/practice/generate", {
+student_id: currentStudentId, session_id: "web-ui", target_concept: "kinematics",
+error_category: "concept_misunderstood", question_count: 3
+});
+appendOutput("Practice Questions", r.data, "practice");
+});
+
+$("btnAnalytics").addEventListener("click", async () => {
+if (!currentStudentId) return;
+const r = await api("GET", `/api/v1/analytics/student/${currentStudentId}`);
+appendOutput("Analytics", r.data, "analytics");
+});
+</script>
+</body>
+</html>

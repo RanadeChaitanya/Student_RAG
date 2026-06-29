@@ -1,0 +1,69 @@
+# Suraj Dada — Development Configuration
+# This file is loaded by the ConfigLoader at startup.
+
+app:
+  name: "Suraj Dada"
+  version: "0.1.0"
+  debug: true
+  environment: "development"
+  host: "127.0.0.1"
+  port: 8000
+  log_level: "DEBUG"
+
+database:
+  rdbms:
+    url: "sqlite+aiosqlite:///./data/suraj_dada.db"
+    echo: false
+    pool_size: 5
+    max_overflow: 10
+  vector:
+    index_path: "./data/faiss_index.bin"
+    dimension: 384
+    index_type: "Flat"
+    metric: "cosine"
+  graph:
+    data_path: "./data/concept_graph.json"
+
+mastery:
+  weakness_threshold: 70
+  prior_score: 60
+  correct_weight: 0.3
+  time_weight: 0.1
+  hint_penalty: 0.15
+  recurrence_penalty: 0.2
+  decay_factor: 0.95
+  bayesian_k: 5.0
+
+retrieval:
+  top_k_before_reranking: 20
+  top_k_after_reranking: 8
+  min_questions: 5
+  max_questions: 8
+  semantic_weight: 0.4
+  metadata_weight: 0.2
+  concept_expansion_weight: 0.2
+  mistake_match_weight: 0.2
+  enable_concept_expansion: true
+  enable_student_filter: true
+  enable_mistake_matching: true
+  enable_reranking: true
+
+llm:
+  provider: "mock"
+  model: "mock-generator"
+  max_context_tokens: 4096
+  max_output_tokens: 2048
+  temperature: 0.7
+  timeout_seconds: 30
+
+assessment:
+  passing_score: 40
+  max_questions_per_assessment: 15
+  time_limit_minutes: 60
+
+diagnosis:
+  enabled: true
+  min_confidence: 0.4
+
+analytics:
+  trend_window_days: 30
