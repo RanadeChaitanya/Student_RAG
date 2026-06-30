@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from suraj_dada.schemas.session import AttemptCreate
+from studob.schemas.session import AttemptCreate
 
 
 class TestSessionMemory:

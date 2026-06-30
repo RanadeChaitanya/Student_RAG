@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from suraj_dada.schemas.question import AppQuestionCreate, TestQuestionCreate
+from studob.schemas.question import AppQuestionCreate, TestQuestionCreate
 
 
 class TestAppQuestions:
@@ -44,7 +44,7 @@ class TestAppQuestions:
 
     @pytest.mark.asyncio
     async def test_search_by_metadata(self, app_questions):
-        from suraj_dada.schemas.question import QuestionFilter
+        from studob.schemas.question import QuestionFilter
 
         data = AppQuestionCreate(
             subject="physics",
@@ -66,7 +66,7 @@ class TestAppQuestions:
 class TestTestQuestions:
     @pytest.mark.asyncio
     async def test_create_and_get(self, session_factory):
-        from suraj_dada.question_bank.test_questions import TestQuestionService
+        from studob.question_bank.test_questions import TestQuestionService
 
         svc = TestQuestionService(session_factory)
         data = TestQuestionCreate(

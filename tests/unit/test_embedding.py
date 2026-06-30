@@ -1,8 +1,8 @@
-import pytest
+﻿import pytest
 
-from suraj_dada.embeddings.generator import EmbeddingGenerator
-from suraj_dada.embeddings.service import EmbeddingService
-from suraj_dada.embeddings.storage import VectorStoreService
+from studob.embeddings.generator import EmbeddingGenerator
+from studob.embeddings.service import EmbeddingService
+from studob.embeddings.storage import VectorStoreService
 
 
 class TestEmbeddingGenerator:

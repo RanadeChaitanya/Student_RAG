@@ -1,4 +1,4 @@
-"""Full end-to-end workflow tested via the API layer."""
+﻿"""Full end-to-end workflow tested via the API layer."""
 
 import asyncio
 
@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 import uvicorn
 
-from suraj_dada.api.app import app
+from studob.api.app import app
 
 
 @pytest_asyncio.fixture

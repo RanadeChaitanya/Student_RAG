@@ -1,8 +1,33 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["studob", "studob.*"]
+
 [project]
-name = "suraj-dada"
-version = "0.1.0"
+name = "studob"
+version = "0.2.0"
 description = "AI-powered adaptive tutoring platform for JEE students"
+readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+  {name = "Studob Team"},
+]
+keywords = ["jee", "education", "adaptive-learning", "tutoring"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Education",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Education :: Computer Aided Instruction (CAI)",
+]
+
+[project.urls]
+Homepage = "https://github.com/RanadeChaitanya/Student_RAG"
+Repository = "https://github.com/RanadeChaitanya/Student_RAG.git"
+Documentation = "https://github.com/RanadeChaitanya/Student_RAG"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",

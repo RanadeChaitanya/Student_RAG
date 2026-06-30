@@ -18,8 +18,10 @@ env/
 *.swo
 
 # Project data (runtime state)
-data/
-!data/.gitkeep
+data/studob.db
+data/suraj_dada.db
+data/faiss_index.bin
+data/faiss_index.bin.meta
 
 # Config secrets
 configs/production/*.yaml
@@ -42,5 +44,5 @@ Thumbs.db
 htmlcov/
 .pytest_cache/
 
-# Docker
-docker/data/
+# Cache
+.ruff_cache/

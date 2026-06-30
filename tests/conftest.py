@@ -1,20 +1,20 @@
-import uuid
+﻿import uuid
 from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from suraj_dada.config.loader import get_config
-from suraj_dada.database.models import AppQuestion, Base, MasteryScore, Student
-from suraj_dada.embeddings.generator import EmbeddingGenerator
-from suraj_dada.embeddings.service import EmbeddingService
-from suraj_dada.embeddings.storage import VectorStoreService
-from suraj_dada.graph.store import ConceptGraphStore
-from suraj_dada.question_bank.app_questions import AppQuestionService
-from suraj_dada.student.mastery import MasteryService
-from suraj_dada.student.profile import StudentProfileService
-from suraj_dada.student.session_memory import SessionMemoryService
+from studob.config.loader import get_config
+from studob.database.models import AppQuestion, Base, MasteryScore, Student
+from studob.embeddings.generator import EmbeddingGenerator
+from studob.embeddings.service import EmbeddingService
+from studob.embeddings.storage import VectorStoreService
+from studob.graph.store import ConceptGraphStore
+from studob.question_bank.app_questions import AppQuestionService
+from studob.student.mastery import MasteryService
+from studob.student.profile import StudentProfileService
+from studob.student.session_memory import SessionMemoryService
 
 
 @pytest_asyncio.fixture

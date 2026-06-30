@@ -1,6 +1,6 @@
-# Engineering Decisions
+﻿# Engineering Decisions
 
-## Decision Log for Suraj Dada MVP
+## Decision Log for Studob MVP
 
 ---
 
@@ -12,7 +12,7 @@
 
 **Alternatives considered:** TypeScript/Node.js, Go, Rust
 
-**Future replacement strategy:** The modular architecture (FastAPI → services → domain modules) means any language could replace the API layer without affecting domain logic.
+**Future replacement strategy:** The modular architecture (FastAPI â†’ services â†’ domain modules) means any language could replace the API layer without affecting domain logic.
 
 ---
 
@@ -24,7 +24,7 @@
 
 **Alternatives considered:** Flask (sync only, no native OpenAPI), Django (too opinionated, heavy for API), Starlette (too low-level)
 
-**Future replacement strategy:** The API layer is thin (endpoints → services). Can be replaced without touching business logic.
+**Future replacement strategy:** The API layer is thin (endpoints â†’ services). Can be replaced without touching business logic.
 
 ---
 
@@ -154,7 +154,7 @@
 
 **Reasoning:** Standard convention. Keeps runtime state separate from source code. The directory is gitignored. Paths are configurable.
 
-**Alternatives considered:** /var/data, ~/.suraj-dada, Docker volumes
+**Alternatives considered:** /var/data, ~/.studob, Docker volumes
 
 **Future replacement strategy:** In production, these would be mapped to Docker volumes or cloud storage, not local files.
 

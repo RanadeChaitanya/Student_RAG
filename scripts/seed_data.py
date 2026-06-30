@@ -1,4 +1,4 @@
-# ruff: noqa: E501
+﻿# ruff: noqa: E501
 import asyncio
 import json
 import os
@@ -8,21 +8,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sqlalchemy import func, select
 
-from suraj_dada.config.loader import get_config
-from suraj_dada.database.engine import DatabaseEngine
-from suraj_dada.database.models import (
+from studob.config.loader import get_config
+from studob.database.engine import DatabaseEngine
+from studob.database.models import (
     AppQuestion,
     MasteryScore,
     TestQuestion,
 )
-from suraj_dada.embeddings.generator import EmbeddingGenerator
-from suraj_dada.embeddings.service import EmbeddingService
-from suraj_dada.embeddings.storage import VectorStoreService
-from suraj_dada.logging_setup import get_logger, setup_logging
-from suraj_dada.question_bank.app_questions import AppQuestionService
-from suraj_dada.question_bank.test_questions import TestQuestionService
-from suraj_dada.schemas.question import AppQuestionCreate, TestQuestionCreate
-from suraj_dada.student.profile import StudentProfileService
+from studob.embeddings.generator import EmbeddingGenerator
+from studob.embeddings.service import EmbeddingService
+from studob.embeddings.storage import VectorStoreService
+from studob.logging_setup import get_logger, setup_logging
+from studob.question_bank.app_questions import AppQuestionService
+from studob.question_bank.test_questions import TestQuestionService
+from studob.schemas.question import AppQuestionCreate, TestQuestionCreate
+from studob.student.profile import StudentProfileService
 
 logger = get_logger("seed")
 
@@ -486,7 +486,7 @@ async def seed():
     setup_logging(settings.app.log_level)
 
     logger.info("=" * 60)
-    logger.info("Suraj Dada MVP - Seed Data Script")
+    logger.info("Studob MVP - Seed Data Script")
     logger.info("=" * 60)
 
     logger.info("Initializing database...")
@@ -504,7 +504,7 @@ async def seed():
             student = existing
             logger.info(f"  Student exists: {s['name']} (id={student.id})")
         else:
-            from suraj_dada.schemas.student import StudentCreate
+            from studob.schemas.student import StudentCreate
 
             data = StudentCreate(**s)
             student = await student_service.create_student(data)
@@ -615,6 +615,199 @@ async def seed():
         logger.info(
             f"  Concept graph: {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges"
         )
+
+    # Seed past session history (5-6 sessions per student with attempts)
+    logger.info("Seeding past session history...")
+    from datetime import UTC, datetime, timedelta
+
+    from studob.database.models import Attempt, MistakeRecord, Session
+    from studob.student.session_memory import SessionMemoryService
+
+    _ = SessionMemoryService(session_factory)
+
+    past_session_templates = [
+        {
+            "type": "practice",
+            "concept": "Motion in 1D",
+            "subject": "physics",
+            "topic": "mechanics",
+            "q_ids": [1],
+            "correct": True,
+            "hints": 1,
+            "time": 45.0,
+            "days_ago": 14,
+        },
+        {
+            "type": "practice",
+            "concept": "Newton's Laws",
+            "subject": "physics",
+            "topic": "mechanics",
+            "q_ids": [2],
+            "correct": False,
+            "hints": 2,
+            "time": 120.0,
+            "days_ago": 13,
+        },
+        {
+            "type": "assessment",
+            "concept": "physics",
+            "subject": "physics",
+            "topic": "mechanics",
+            "q_ids": [1, 2, 4, 7, 8],
+            "correct": True,
+            "hints": 0,
+            "time": 30.0,
+            "days_ago": 10,
+        },
+        {
+            "type": "practice",
+            "concept": "Electrostatics",
+            "subject": "physics",
+            "topic": "electrostatics",
+            "q_ids": [5],
+            "correct": False,
+            "hints": 3,
+            "time": 180.0,
+            "days_ago": 8,
+        },
+        {
+            "type": "practice",
+            "concept": "Chemical Bonding",
+            "subject": "chemistry",
+            "topic": "physical_chemistry",
+            "q_ids": [9],
+            "correct": True,
+            "hints": 0,
+            "time": 25.0,
+            "days_ago": 7,
+        },
+        {
+            "type": "assessment",
+            "concept": "chemistry",
+            "subject": "chemistry",
+            "topic": "physical_chemistry",
+            "q_ids": [9, 10, 11, 12, 13],
+            "correct": False,
+            "hints": 0,
+            "time": 60.0,
+            "days_ago": 5,
+        },
+        {
+            "type": "practice",
+            "concept": "Differentiation",
+            "subject": "mathematics",
+            "topic": "calculus",
+            "q_ids": [15],
+            "correct": True,
+            "hints": 1,
+            "time": 55.0,
+            "days_ago": 4,
+        },
+        {
+            "type": "assessment",
+            "concept": "mathematics",
+            "subject": "mathematics",
+            "topic": "calculus",
+            "q_ids": [15, 16, 14, 17, 18],
+            "correct": False,
+            "hints": 0,
+            "time": 90.0,
+            "days_ago": 3,
+        },
+    ]
+
+    async with session_factory() as db_sess:
+        for student_name, student_rec in created_students.items():
+            student_id = student_rec.id
+            for i, tmpl in enumerate(past_session_templates):
+                sess_id = f"past-{student_name.lower().replace(' ', '-')}-{i}"
+                started = datetime.now(UTC) - timedelta(days=tmpl["days_ago"], hours=i * 2)
+                ended = started + timedelta(
+                    seconds=tmpl["time"] * 2 if tmpl["type"] == "assessment" else 300
+                )
+
+                existing = await db_sess.execute(select(Session).where(Session.id == sess_id))
+                if existing.scalar_one_or_none():
+                    continue
+
+                q_count = len(tmpl["q_ids"])
+                correct_count = q_count if tmpl["correct"] else max(0, q_count - 2)
+
+                sess = Session(
+                    id=sess_id,
+                    student_id=student_id,
+                    session_type=tmpl["type"],
+                    started_at=started,
+                    ended_at=ended,
+                    questions_count=q_count,
+                    correct_count=correct_count,
+                    mastery_delta=5.0 if tmpl["correct"] else -8.0,
+                )
+                db_sess.add(sess)
+
+                for qi, qid in enumerate(tmpl["q_ids"]):
+                    is_correct = (
+                        tmpl["correct"] if tmpl["type"] == "practice" else (qi < correct_count)
+                    )
+                    ans_time = (
+                        tmpl["time"] if tmpl["type"] == "practice" else (tmpl["time"] / q_count)
+                    )
+                    attempt = Attempt(
+                        student_id=student_id,
+                        question_id=qid,
+                        question_type=tmpl["type"],
+                        is_correct=is_correct,
+                        response_time_seconds=ans_time + qi * 5,
+                        hints_used=tmpl["hints"] if qi == 0 else 0,
+                        retry_count=0 if is_correct else 1,
+                        answered_at=started + timedelta(seconds=(qi + 1) * (ans_time + 10)),
+                        session_id=sess_id,
+                    )
+                    db_sess.add(attempt)
+
+                    if not is_correct:
+                        mr = MistakeRecord(
+                            student_id=student_id,
+                            question_id=qid,
+                            session_id=sess_id,
+                            error_category="concept_misunderstood"
+                            if qi % 2 == 0
+                            else "calculation_error",
+                            concept_tag=tmpl["concept"],
+                            confidence=0.7,
+                            diagnosis_detail={},
+                            created_at=started + timedelta(seconds=(qi + 1) * ans_time),
+                        )
+                        db_sess.add(mr)
+
+                ms_result = await db_sess.execute(
+                    select(MasteryScore).where(
+                        MasteryScore.student_id == student_id,
+                        MasteryScore.subtopic == tmpl["concept"],
+                    )
+                )
+                existing_ms = ms_result.scalar_one_or_none()
+                if existing_ms and tmpl["correct"]:
+                    existing_ms.score = min(100.0, existing_ms.score + 3.0)
+                    existing_ms.attempts += q_count
+                elif existing_ms and not tmpl["correct"]:
+                    existing_ms.score = max(0.0, existing_ms.score - 5.0)
+                    existing_ms.attempts += q_count
+                elif tmpl["correct"]:
+                    ms = MasteryScore(
+                        student_id=student_id,
+                        subject=tmpl["subject"],
+                        topic=tmpl["topic"],
+                        subtopic=tmpl["concept"],
+                        score=65.0,
+                        confidence=0.6,
+                        attempts=q_count,
+                        last_updated=datetime.now(UTC),
+                    )
+                    db_sess.add(ms)
+
+        await db_sess.commit()
+    logger.info("  Past session history seeded (8 sessions per student)")
 
     logger.info("=" * 60)
     logger.info("Seed complete! Database, vector index, and sample data ready.")

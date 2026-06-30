@@ -1,7 +1,7 @@
-import pytest
+﻿import pytest
 
-from suraj_dada.exceptions import NotFoundError
-from suraj_dada.schemas.student import StudentCreate
+from studob.exceptions import NotFoundError
+from studob.schemas.student import StudentCreate
 
 
 class TestStudentProfile:
@@ -37,7 +37,7 @@ class TestStudentProfile:
 
     async def test_update_student(self, student_profile, seeded_db):
         _, sid = seeded_db
-        from suraj_dada.schemas.student import StudentUpdate
+        from studob.schemas.student import StudentUpdate
 
         updated = await student_profile.update_student(sid, StudentUpdate(grade="12 Pass"))
         assert updated.grade == "12 Pass"

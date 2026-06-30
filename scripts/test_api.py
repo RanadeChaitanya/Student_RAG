@@ -1,4 +1,4 @@
-"""End-to-end API test script."""
+﻿"""End-to-end API test script."""
 
 import asyncio
 import os
@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import httpx
 import uvicorn
 
-from suraj_dada.api.app import app
+from studob.api.app import app
 
 BASE = "http://127.0.0.1:8000"
 

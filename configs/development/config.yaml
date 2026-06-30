@@ -1,18 +1,16 @@
-# Suraj Dada — Development Configuration
-# This file is loaded by the ConfigLoader at startup.
-
 app:
-  name: "Suraj Dada"
+  name: "Studob"
   version: "0.1.0"
   debug: true
   environment: "development"
   host: "127.0.0.1"
-  port: 8000
+  port: 8005
   log_level: "DEBUG"
+  api_key: ""
 
 database:
   rdbms:
-    url: "sqlite+aiosqlite:///./data/suraj_dada.db"
+    url: "sqlite+aiosqlite:///./data/studob.db"
     echo: false
     pool_size: 5
     max_overflow: 10
@@ -48,13 +46,11 @@ retrieval:
   enable_mistake_matching: true
   enable_reranking: true
 
-llm:
-  provider: "mock"
-  model: "mock-generator"
-  max_context_tokens: 4096
-  max_output_tokens: 2048
-  temperature: 0.7
-  timeout_seconds: 30
+content_engine:
+  default_question_count: 5
+  max_hints_per_question: 3
+  enable_adaptive_difficulty: true
+  enable_misconception_feedback: true
 
 assessment:
   passing_score: 40

@@ -1,8 +1,8 @@
-import pytest
+﻿import pytest
 
-from suraj_dada.diagnosis import ErrorTypeRegistry
-from suraj_dada.diagnosis.classifier import RootCauseClassifier
-from suraj_dada.schemas.diagnosis import ErrorCategory, MistakeDiagnosisRequest
+from studob.diagnosis import ErrorTypeRegistry
+from studob.diagnosis.classifier import RootCauseClassifier
+from studob.schemas.diagnosis import ErrorCategory, MistakeDiagnosisRequest
 
 
 class TestErrorTypeRegistry:

@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from suraj_dada.exceptions import NotFoundError
+from studob.exceptions import NotFoundError
 
 
 class TestMasteryService:

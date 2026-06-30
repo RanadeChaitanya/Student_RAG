@@ -1,13 +1,13 @@
-import pytest
+﻿import pytest
 
-from suraj_dada.config.loader import get_config
+from studob.config.loader import get_config
 
 
 class TestConfig:
     def test_config_loaded(self):
         cfg = get_config()
         assert cfg is not None
-        assert cfg.app.name == "Suraj Dada"
+        assert cfg.app.name == "Studob"
 
     def test_app_version(self):
         cfg = get_config()
@@ -15,7 +15,7 @@ class TestConfig:
 
     def test_database_path(self):
         cfg = get_config()
-        assert "suraj_dada.db" in cfg.database.rdbms.url
+        assert "studob.db" in cfg.database.rdbms.url
 
     def test_mastery_thresholds(self):
         cfg = get_config()

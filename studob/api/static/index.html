@@ -1,0 +1,51 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Studob — Adaptive JEE Preparation Platform">
+<title>Studob — JEE Adaptive Tutor</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<nav class="navbar">
+  <a class="navbar-brand" href="#dashboard">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    Studob <small>v0.2</small>
+  </a>
+  <div class="navbar-nav">
+    <a class="nav-link" href="#dashboard">Dashboard</a>
+    <a class="nav-link" href="#practice">Practice</a>
+    <a class="nav-link" href="#assessment">Assessment</a>
+    <a class="nav-link" href="#questions">Questions</a>
+    <a class="nav-link" href="#concepts">Concepts</a>
+    <a class="nav-link" href="#diagnosis/">Diagnosis</a>
+    <a class="nav-link" href="#analytics/">Analytics</a>
+    <a class="nav-link" href="#students">Students</a>
+  </div>
+  <button class="hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="navbar-end">
+    <span id="navStudent" class="text-dim" style="font-size:.82rem"></span>
+    <button class="btn btn-primary btn-sm" onclick="showCreateStudent()">+ Student</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div id="page-dashboard" class="page active"></div>
+  <div id="page-students" class="page"></div>
+  <div id="page-student" class="page"></div>
+  <div id="page-questions" class="page"></div>
+  <div id="page-practice" class="page"></div>
+  <div id="page-assessment" class="page"></div>
+  <div id="page-concepts" class="page"></div>
+  <div id="page-diagnosis" class="page"></div>
+  <div id="page-analytics" class="page"></div>
+</div>
+
+<div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)closeModal()"></div>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

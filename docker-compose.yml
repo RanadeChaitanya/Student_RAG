@@ -1,0 +1,17 @@
+﻿version: "3.9"
+
+services:
+  studob:
+    build: .
+    container_name: studob
+    ports:
+      - "8000:8000"
+    volumes:
+      - studob_data:/app/data
+    environment:
+      - SURAJ_ENV=development
+      - SURAJ_APP__HOST=0.0.0.0
+      - SURAJ_APP__PORT=8000
+
+volumes:
+  studob_data:

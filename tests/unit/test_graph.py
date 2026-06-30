@@ -1,8 +1,8 @@
-import json
+﻿import json
 
 import pytest
 
-from suraj_dada.graph.store import ConceptGraphStore
+from studob.graph.store import ConceptGraphStore
 
 
 @pytest.fixture

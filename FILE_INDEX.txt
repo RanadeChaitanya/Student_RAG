@@ -1,0 +1,302 @@
+================================================================================
+  STUDOB — FILE INDEX
+  Adaptive JEE Preparation Platform
+================================================================================
+
+This file documents every source file in the repository, its purpose, and key
+exports. Files are grouped by directory.
+
+================================================================================
+ROOT
+================================================================================
+
+  .github/workflows/ci.yml         — GitHub Actions CI: lint, test, syntax check
+  .dockerignore                    — Files excluded from Docker build context
+  .gitignore                       — Files excluded from version control
+  Dockerfile                       — Docker image build (Python 3.11-slim)
+  README.md                        — Project overview, setup, usage
+  FILE_INDEX.txt                   — This file
+  docker-compose.yml               — Docker Compose (app + optional services)
+  docker-entrypoint.sh             — Docker container entry point (seed + run)
+  main.py                          — Quick-start entry: `python main.py`
+  pyproject.toml                   — Package metadata, dependencies, tool config
+  run.py                           — Bootstrap entry with logging init
+  START.bat                        — Windows one-click: seed DB + start server
+
+================================================================================
+studob/ — Main Application Package
+================================================================================
+
+  __init__.py                      — Package marker
+  exceptions.py                    — Custom exceptions (AssessmentError,
+                                     NotFoundError, etc.)
+  logging_setup.py                 — Structured logging configuration
+
+--------------------------------------------------------------------------------
+studob/analytics/ — Analytics & Reporting
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  mastery_trends.py                — Mastery score trend computation over time
+  mistake_patterns.py              — Mistake pattern aggregation & analysis
+  service.py                       — AnalyticsService: student analytics,
+                                     weak/strong topics, recommendations
+  session_reports.py               — Session-level performance reports
+
+--------------------------------------------------------------------------------
+studob/api/ — FastAPI Web Layer
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  app.py                           — FastAPI application factory, router
+                                     registration, middleware, CORS
+  dependencies.py                  — AppContext: service initialization &
+                                     dependency injection container
+  middleware.py                    — Auth/request middleware
+
+  routes/analytics.py             — GET /api/v1/analytics/student/{id},
+                                     GET /api/v1/analytics/session/{id}
+  routes/assessment.py            — POST /api/v1/assessment/ (create),
+                                     POST /{id}/answer, POST /{id}/complete,
+                                     GET /{id}
+  routes/diagnosis.py             — GET /api/v1/diagnosis/patient/{id}/history,
+                                     GET /patterns
+  routes/graph.py                 — GET /api/v1/graph/full-graph,
+                                     /concepts, /concepts/{id},
+                                     /concepts/{id}/chain, /concepts/{id}/gaps/{student}
+  routes/practice.py              — POST /api/v1/practice/generate,
+                                     GET /hint/{id}, GET /explanation/{id},
+                                     POST /{id}/result
+  routes/questions.py             — GET /api/v1/questions/app, GET /test
+  routes/reports.py               — POST /api/v1/reports/test-report (HTML)
+  routes/retrieval.py             — GET /api/v1/retrieval/health
+  routes/sessions.py              — GET /api/v1/sessions/student/{id}/all,
+                                     /active
+  routes/students.py              — CRUD: GET/POST /api/v1/students/,
+                                     GET/PUT/DELETE /{id},
+                                     GET /{id}/mastery, GET /{id}/weak-topics
+
+  static/
+    css/style.css                  — Complete dark-theme CSS (Inter font,
+                                     card system, progress bars, responsive)
+    index.html                     — SPA shell: nav, page containers,
+                                     script loading
+    js/api.js                      — API client: fetch wrapper for all
+                                     backend endpoints
+    js/app.js                      — SPA frontend: 9-page renderer,
+                                     navigation, state management
+
+--------------------------------------------------------------------------------
+studob/assessment/ — Assessment Engine
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  engine.py                        — AssessmentEngine: create, submit answer,
+                                     complete assessment with mastery update
+  evaluator.py                     — AnswerEvaluator: compare student answer
+                                     to correct answer
+  tagger.py                        — AnswerTagger: attach subject/topic/
+                                     difficulty tags to attempts
+
+--------------------------------------------------------------------------------
+studob/config/ — Configuration
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  loader.py                        — Config loader: YAML + env override,
+                                     Settings pydantic model
+
+--------------------------------------------------------------------------------
+studob/content_engine/ — Content Generation & Practice
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker; initialize() populates
+                                     hint/explanation/solution repos
+  adaptive_renderer.py             — Adaptive content rendering logic
+  content_templates.py             — Content template definitions
+  explanation_repository.py        — ExplanationRepository: fetch/store
+                                     explanations by question ID
+  formula_repository.py            — FormulaRepository: fetch/store formulas
+  hint_repository.py               — HintRepository: fetch/store hints
+  misconception_repository.py      — MisconceptionRepository:
+                                     fetch/store misconceptions
+  practice_selector.py             — PracticeSelector: select questions
+                                     based on student weak topics, batch query
+  solution_repository.py           — SolutionRepository: fetch/store solutions
+
+--------------------------------------------------------------------------------
+studob/database/ — Data Layer
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  engine.py                        — Async SQLAlchemy engine creation
+  models.py                        — ORM models: Student, AppQuestion,
+                                     TestQuestion, MasteryScore, Session,
+                                     Attempt, MistakeRecord, MistakePattern
+
+--------------------------------------------------------------------------------
+studob/diagnosis — Error Diagnosis
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  classifier.py                    — RootCauseClassifier: classify student
+                                     errors into categories
+  concept_tagger.py                — ConceptTagger: tag mistakes with
+                                     concept graph nodes
+  engine.py                        — DiagnosisEngine: mistake history,
+                                     pattern detection, remediation
+  error_types.py                   — ErrorTypeRegistry: error categories
+                                     (formula, sign, unit, reading,
+                                     concept, calculation), remediations
+
+--------------------------------------------------------------------------------
+studob/embeddings/ — Vector Embeddings
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  generator.py                     — EmbeddingGenerator: deterministic
+                                     hash-based embeddings
+  service.py                       — EmbeddingService: embed text + search
+  storage.py                       — VectorStoreService: FAISS index CRUD,
+                                     save/load from disk
+
+--------------------------------------------------------------------------------
+studob/graph/ — Concept Graph
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  schema.py                        — ConceptNode pydantic schema
+  service.py                       — ConceptGraphService: queries,
+                                     prerequisites, traversal,
+                                     misconceptions, related concepts
+  store.py                         — ConceptGraphStore: JSON-backed
+                                     directed graph with search, pathfinding,
+                                     siblings, related concepts
+
+--------------------------------------------------------------------------------
+studob/question_bank/ — Question Repository
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  app_questions.py                 — AppQuestionService: CRUD, search,
+                                     batch query by concepts
+  metadata.py                      — Question metadata helpers
+  test_questions.py                — TestQuestionService: CRUD, JEE
+                                     test questions, filter by subject/topic
+
+--------------------------------------------------------------------------------
+studob/retrieval/ — Context Retrieval
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  concept_expansion.py             — Concept expansion for retrieval queries
+  context_builder.py               — ContextBuilder: assemble retrieval
+                                     context packages
+  metadata_filter.py               — MetadataFilter: filter by subject,
+                                     topic, difficulty
+  mistake_matcher.py               — MistakeMatcher: score candidate mistakes
+                                     against query by concept/category/tags
+  orchestrator.py                  — RetrievalOrchestrator: combine semantic
+                                     + mistake + concept + session retrieval
+  reranker.py                      — Reranker: score + sort candidates by
+                                     concept match, difficulty, recency
+  semantic.py                      — SemanticRetriever: vector search via
+                                     EmbeddingService
+  student_filter.py                — StudentFilter: filter results by
+                                     student context
+
+--------------------------------------------------------------------------------
+studob/schemas/ — Pydantic Schemas
+--------------------------------------------------------------------------------
+  __init__.py                      — Package-wide re-exports
+  analytics.py                     — AnalyticsResponse, MistakePatternInfo,
+                                     PracticeRecommendation
+  assessment.py                    — AssessmentCreate, AssessmentResponse,
+                                     AssessmentResult
+  diagnosis.py                     — DiagnosisResult, MistakeHistoryItem,
+                                     MistakePatternInfo, RemediationResult
+  practice.py                      — PracticeGenerateRequest, PracticeResponse,
+                                     PracticeResultRequest, PracticeResultResponse
+  question.py                      — QuestionBase, AppQuestionResponse,
+                                     TestQuestionResponse
+  retrieval.py                     — RetrievalRequest, RetrievalResponse,
+                                     ContextPackage
+  session.py                       — SessionCreate, SessionResponse,
+                                     AttemptCreate, AttemptResponse
+  student.py                       — StudentCreate, StudentResponse,
+                                     MasteryScoreResponse,
+                                     MasterySummaryResponse,
+                                     MasteryUpdateSignals, WeakTopicInfo
+
+--------------------------------------------------------------------------------
+studob/student/ — Student Domain
+--------------------------------------------------------------------------------
+  __init__.py                      — Subpackage marker
+  mastery.py                       — MasteryService: get/update mastery
+                                     scores, compute mastery updates,
+                                     identify weak topics & strengths
+  profile.py                       — StudentProfileService: CRUD,
+                                     search by name
+  session_memory.py                — SessionMemoryService: start/end session,
+                                     record attempts, get session history,
+                                     active sessions
+
+================================================================================
+tests/ — Test Suite
+================================================================================
+  conftest.py                      — Shared fixtures: db_session,
+                                     session_factory, concept_graph,
+                                     seeded_db, services
+  __init__.py                      — Package marker
+
+  unit/
+    test_assessment.py             — Assessment engine unit tests
+    test_auth_middleware.py        — Auth middleware unit tests
+    test_config.py                 — Config loader unit tests
+    test_diagnosis.py              — Error type registry + classifier tests
+    test_embedding.py              — Embedding generator, vector store,
+                                     embedding service tests
+    test_graph.py                  — ConceptGraphStore unit tests (load,
+                                     search, traverse, pathfinding)
+    test_mistake_matcher.py        — MistakeMatcher similarity scoring tests
+    test_questions.py              — AppQuestion + TestQuestion CRUD tests
+    test_reranker.py               — Reranker scoring, boost, penalty tests
+    test_retrieval_orchestrator.py — Orchestrator context package tests
+    test_session_memory_concepts.py— Session memory concept tests
+    test_student_mastery.py        — MasteryService update/summary tests
+    test_student_profile.py        — StudentProfileService CRUD tests
+    test_student_session.py        — SessionMemoryService lifecycle tests
+
+  integration/
+    test_full_workflow.py          — End-to-end API workflow test
+
+================================================================================
+scripts/ — Utility Scripts
+================================================================================
+  create_dirs.ps1                  — PowerShell: create directory structure
+  seed_data.py                     — Seed database with sample students,
+                                     questions, sessions, mistakes, FAISS
+  seed_full.py                     — Full seed: 50 students, 88 app Qs,
+                                     50 test Qs, 412+ mastery, 528 sessions,
+                                     2902 attempts, 1174 mistakes, FAISS
+  test_api.py                      — Original API smoke tests
+  test_api_endpoints.py            — 97 comprehensive API endpoint tests
+                                     (health, CRUD, practice, assessment,
+                                     diagnosis, analytics, graph, retrieval)
+  test_faiss.py                    — FAISS index creation & search test
+
+================================================================================
+configs/ — Configuration
+================================================================================
+  development/config.yaml          — Dev settings: DB path, mastery
+                                     thresholds, retrieval params, vector dim
+
+================================================================================
+docs/ — Documentation
+================================================================================
+  architecture.md                  — System architecture overview
+  engineering_decisions.md         — Key technical decisions & rationale
+  HANDOFF.md                       — Context handoff between sessions
+  progress_summary.md              — Development progress tracking
+
+================================================================================
+data/ — Runtime Data (gitignored except concept_graph.json)
+================================================================================
+  concept_graph.json               — Knowledge graph: 45+ concept nodes
+                                     with prerequisites, subjects, topics
+  studob.db                        — SQLite database (seeded)
+  faiss_index.bin                  — FAISS vector index (88 vectors)
+  faiss_index.bin.meta             — FAISS index metadata
+
+================================================================================
+END OF FILE INDEX
+================================================================================
