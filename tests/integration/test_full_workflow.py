@@ -95,13 +95,21 @@ async def test_workflow_api(api_client):
     )
     assert r.status_code == 200
 
-    # 9. Create an assessment
+    # 9. Get valid test question IDs first
+    r = await c.get("/api/v1/questions/test")
+    assert r.status_code == 200
+    all_test_qs = r.json()
+    assert len(all_test_qs) > 0
+    test_q_ids = [q["id"] for q in all_test_qs[:2]]
+    assert len(test_q_ids) == 2
+
+    # 10. Create an assessment
     r = await c.post(
         "/api/v1/assessment/",
         json={
             "student_id": sid,
             "subject": "Physics",
-            "question_ids": [1, 2],
+            "question_ids": test_q_ids,
             "time_limit_minutes": 30,
         },
     )

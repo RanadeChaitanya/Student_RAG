@@ -149,11 +149,20 @@ class AppQuestionService:
             result_map: dict[str, list[AppQuestionResponse]] = {}
             for tag in concept_tags:
                 tag_lower = tag.lower()
+                tag_parts = set()
+                tag_parts.add(tag_lower)
+                tag_parts.add(tag_lower.replace("-", " "))
+                for part in tag_lower.replace("-", " ").split():
+                    if len(part) > 1:
+                        tag_parts.add(part)
                 matched = [
                     AppQuestionResponse.model_validate(q) for q in all_questions
-                    if tag_lower in q.subtopic.lower()
-                    or tag_lower in q.topic.lower()
-                    or tag_lower in q.subject.lower()
+                    if any(
+                        p in q.subtopic.lower()
+                        or p in q.topic.lower()
+                        or p in q.subject.lower()
+                        for p in tag_parts
+                    )
                 ]
                 result_map[tag] = matched
             return result_map
