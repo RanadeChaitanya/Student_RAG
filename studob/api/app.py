@@ -10,6 +10,7 @@ from studob.api.middleware import AuthMiddleware, ErrorHandlingMiddleware, Loggi
 from studob.api.routes import (
     analytics,
     assessment,
+    auth,
     graph,
     practice,
     questions,
@@ -76,6 +77,7 @@ app.include_router(practice.router, prefix="/api/v1/practice", tags=["Practice"]
 app.include_router(assessment.router, prefix="/api/v1/assessment", tags=["Assessment"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 
 
 @app.get("/")

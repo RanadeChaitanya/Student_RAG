@@ -24,6 +24,7 @@ class Student(Base):
     exam_target: Mapped[str | None] = mapped_column(String(255), nullable=True)
     board: Mapped[str] = mapped_column(String(100), nullable=False)
     language: Mapped[str] = mapped_column(String(50), nullable=False, default="english")
+    pin: Mapped[str] = mapped_column(String(10), nullable=False, default="1234")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 

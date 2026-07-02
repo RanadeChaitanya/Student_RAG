@@ -1,8 +1,22 @@
 const API = {
   BASE: '/api/v1',
 
+  _token: null,
+
+  setToken(token) {
+    this._token = token;
+    if (token) localStorage.setItem('studob_token', token);
+    else localStorage.removeItem('studob_token');
+  },
+
+  loadToken() {
+    this._token = localStorage.getItem('studob_token');
+    return this._token;
+  },
+
   async request(method, path, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (this._token) opts.headers['Authorization'] = 'Bearer ' + this._token;
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(this.BASE + path, opts);
     if (res.status === 204) return null;
@@ -11,12 +25,10 @@ const API = {
     return data;
   },
 
-  // Students
-  listStudents() { return this.request('GET', '/students/'); },
-  getStudent(id) { return this.request('GET', `/students/${id}`); },
-  getStudentByName(name) { return this.request('GET', `/students/by-name/${encodeURIComponent(name)}`); },
-  createStudent(data) { return this.request('POST', '/students/', data); },
-  deleteStudent(id) { return this.request('DELETE', `/students/${id}`); },
+  // Auth
+  login(name, pin) { return this.request('POST', '/auth/login', { name, pin }); },
+  verifyToken() { return this.request('POST', '/auth/verify'); },
+  logout() { return this.request('POST', '/auth/logout'); },
 
   // Mastery
   getMastery(studentId) { return this.request('GET', `/students/${studentId}/mastery`); },
@@ -37,11 +49,7 @@ const API = {
   getSession(id) { return this.request('GET', `/sessions/${id}`); },
   endSession(id) { return this.request('PUT', `/sessions/${id}/end`); },
   recordAttempt(sessionId, data) { return this.request('POST', `/sessions/${sessionId}/attempts`, data); },
-  getActiveSessions(studentId) { return this.request('GET', `/sessions/student/${studentId}/active`); },
   getStudentSessions(studentId) { return this.request('GET', `/sessions/student/${studentId}/all`); },
-
-  // Retrieval
-  retrieve(data) { return this.request('POST', '/retrieval/retrieve', data); },
 
   // Practice
   generatePractice(data) { return this.request('POST', '/practice/generate', data); },
@@ -59,7 +67,9 @@ const API = {
   getSessionAnalytics(sessionId) { return this.request('GET', `/analytics/session/${sessionId}`); },
 
   // Reports
-  generateReport(studentId, sessionId) { return this.request('POST', '/reports/test-report', { student_id: studentId, session_id: sessionId }); },
+  generateReport(studentId, sessionId) {
+    return this.request('POST', '/reports/test-report', { student_id: studentId, session_id: sessionId });
+  },
 
   // Concept Graph
   getFullGraph() { return this.request('GET', '/graph/full-graph'); },

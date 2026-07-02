@@ -22,20 +22,31 @@ class AuthMiddleware(BaseHTTPMiddleware):
         settings = getattr(request.app.state, "settings", None)
         api_key_setting = settings.app.api_key if settings else ""
 
-        if not api_key_setting:
-            return await call_next(request)
-
         path = request.url.path
-        if path in SKIP_AUTH_PATHS or path.startswith("/docs") or path.startswith("/openapi.json"):
+
+        # Always allow public paths
+        if path in SKIP_AUTH_PATHS or path.startswith("/docs") or path.startswith("/openapi.json") or path.startswith("/api/v1/auth/"):
             return await call_next(request)
 
-        request_api_key = request.headers.get("X-API-Key", "")
-        if request_api_key != api_key_setting:
-            logger.warning("Unauthorized request", extra={"path": path})
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Missing or invalid API key", "code": "UNAUTHORIZED"},
-            )
+        # Check token from Authorization header
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+            from studob.auth.service import AuthService
+            student_id = AuthService.validate_token(token)
+            if student_id:
+                request.state.student_id = student_id
+                return await call_next(request)
+
+        # Fallback to API key auth
+        if api_key_setting:
+            request_api_key = request.headers.get("X-API-Key", "")
+            if request_api_key != api_key_setting:
+                logger.warning("Unauthorized request", extra={"path": path})
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Missing or invalid API key", "code": "UNAUTHORIZED"},
+                )
 
         return await call_next(request)
 

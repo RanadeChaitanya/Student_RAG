@@ -3,42 +3,81 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Studob — Adaptive JEE Preparation Platform">
 <title>Studob — JEE Adaptive Tutor</title>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 
-<nav class="navbar">
-  <a class="navbar-brand" href="#dashboard">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-    Studob <small>v0.2</small>
-  </a>
-  <div class="navbar-nav">
-    <a class="nav-link" href="#dashboard">Dashboard</a>
-    <a class="nav-link" href="#practice">Practice</a>
-    <a class="nav-link" href="#assessment">Assessment</a>
-    <a class="nav-link" href="#questions">Questions</a>
-    <a class="nav-link" href="#concepts">Concepts</a>
-    <a class="nav-link" href="#analytics/">Analytics</a>
-    <a class="nav-link" href="#students">Students</a>
+<div id="login-page" class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <h1>Studob</h1>
+      <p class="text-dim">JEE Adaptive Learning Platform</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Student Name</label>
+      <input class="form-control" id="loginName" placeholder="Enter your name" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">PIN</label>
+      <input class="form-control" id="loginPin" type="password" placeholder="Default: 1234" autocomplete="off">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="handleLogin()">Sign In</button>
+    <p id="loginError" class="text-danger mt-2" style="display:none;font-size:0.84rem;text-align:center"></p>
   </div>
-  <button class="hamburger" onclick="toggleNav()" aria-label="Menu"><span></span><span></span><span></span></button>
-  <div class="navbar-end">
-    <span id="navStudent" class="text-dim" style="font-size:.82rem"></span>
-    <button class="btn btn-primary btn-sm" onclick="showCreateStudent()">+ Student</button>
-  </div>
-</nav>
+</div>
 
-<div class="container">
-  <div id="page-dashboard" class="page active"></div>
-  <div id="page-students" class="page"></div>
-  <div id="page-student" class="page"></div>
-  <div id="page-questions" class="page"></div>
-  <div id="page-practice" class="page"></div>
-  <div id="page-assessment" class="page"></div>
-  <div id="page-concepts" class="page"></div>
-  <div id="page-analytics" class="page"></div>
+<div id="app-shell" class="app-shell" style="display:none">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <span class="sidebar-brand">Studob</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="#dashboard" data-nav="dashboard">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a class="nav-item" href="#practice" data-nav="practice">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Practice
+      </a>
+      <a class="nav-item" href="#concepts" data-nav="concepts">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Concepts
+      </a>
+      <a class="nav-item" href="#analytics" data-nav="analytics">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Analytics
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-profile" id="sidebarProfile">
+        <div class="profile-avatar-sm" id="profileAvatar">S</div>
+        <div class="profile-info-sm">
+          <div class="profile-name" id="profileName">Student</div>
+          <div class="profile-grade" id="profileGrade">Grade</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm btn-block" onclick="handleLogout()">Logout</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-container">
+      <div id="page-dashboard" class="page active"></div>
+      <div id="page-practice" class="page"></div>
+      <div id="page-practice-session" class="page"></div>
+      <div id="page-practice-results" class="page"></div>
+      <div id="page-assessment" class="page"></div>
+      <div id="page-concepts" class="page"></div>
+      <div id="page-analytics" class="page"></div>
+      <div id="page-analytics-report" class="page"></div>
+    </div>
+  </main>
 </div>
 
 <div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)closeModal()"></div>

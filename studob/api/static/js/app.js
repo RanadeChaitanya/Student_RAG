@@ -1,507 +1,460 @@
-﻿const state = {
-  students: [], selectedStudentId: null, currentView: 'dashboard',
-  currentSessionId: null, practiceQuestions: [], assessmentQuestions: [],
+﻿// ── STATE ──
+const state = {
+  student: null,
+  currentView: 'dashboard',
+  practiceQuestions: [],
+  practiceSessionId: null,
+  practiceStudentId: null,
   assessmentId: null,
+  lastPracticeResult: null,
+  lastAssessmentResult: null,
   _assessState: null,
 };
 
-const COLORS = ['#6b8cff','#4ec9a0','#f0b34b','#f06070','#a078f0','#58c4e8','#f09060','#78d0a0'];
+// ── HELPERS ──
+function fmtPct(v) { return Math.round(v || 0); }
+function initials(name) { return (name || 'S').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(); }
+function scoreClass(v) { return v >= 70 ? 'success' : v >= 40 ? 'warning' : 'danger'; }
+function fmtDate(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  const now = new Date();
+  const diff = (now - date) / (1000 * 86400);
+  if (diff < 1) return 'Today';
+  if (diff < 2) return 'Yesterday';
+  if (diff < 7) return `${Math.floor(diff)} days ago`;
+  if (diff < 30) return `${Math.floor(diff / 7)} week${Math.floor(diff / 7) > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
+}
 
+function scoreRing(pct, size, label) {
+  const r2 = Math.round((size || 100) * 0.38);
+  const circ2 = 2 * Math.PI * r2;
+  const dash2 = Math.max(0, (pct / 100) * circ2);
+  const cls = scoreClass(pct);
+  const sz = size || 100;
+  return `<div class="progress-circle" style="width:${sz}px;height:${sz}px">
+    <svg width="${sz}" height="${sz}" viewBox="0 0 100 100">
+      <circle class="bg" cx="50" cy="50" r="42"/>
+      <circle class="fg ${cls}" cx="50" cy="50" r="42" stroke-dasharray="${dash2} ${circ2}"/>
+    </svg>
+    <span class="pv" style="font-size:${Math.round(sz*0.2)}px">${fmtPct(pct)}${label||'%'}</span>
+  </div>`;
+}
+
+// ── NAVIGATION ──
 function navigate(hash) {
   const page = hash.replace('#', '') || 'dashboard';
   state.currentView = page;
   renderPage(page);
-  updateNav(page);
-  document.querySelector('.navbar-nav')?.classList.remove('open');
-}
-
-function toggleNav() { document.querySelector('.navbar-nav').classList.toggle('open'); }
-
-function updateNav(page) {
-  document.querySelectorAll('.nav-link').forEach(el => {
-    const href = el.getAttribute('href').replace('#', '');
-    el.classList.toggle('active',
-      href === page || page.startsWith(href) ||
-      (href.endsWith('/') && page.startsWith(href)));
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.nav === page.split('/')[0]);
   });
 }
 
 window.addEventListener('hashchange', () => navigate(window.location.hash));
-window.addEventListener('load', () => navigate(window.location.hash || '#dashboard'));
 
+// ── AUTH ──
+async function handleLogin() {
+  const name = document.getElementById('loginName').value.trim();
+  const pin = document.getElementById('loginPin').value.trim() || '1234';
+  const errEl = document.getElementById('loginError');
+  if (!name) { errEl.textContent = 'Please enter your name'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  try {
+    const res = await API.login(name, pin);
+    API.setToken(res.token);
+    state.student = res.student;
+    sessionStorage.setItem('studob_student', JSON.stringify(res.student));
+    showApp();
+  } catch (e) {
+    errEl.textContent = e.message || 'Login failed';
+    errEl.style.display = 'block';
+  }
+}
+
+async function handleLogout() {
+  try { await API.logout(); } catch {}
+  API.setToken(null);
+  state.student = null;
+  sessionStorage.removeItem('studob_student');
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('loginName').value = '';
+  document.getElementById('loginPin').value = '';
+}
+
+async function showApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'flex';
+  if (state.student) {
+    document.getElementById('profileAvatar').textContent = initials(state.student.name);
+    document.getElementById('profileName').textContent = state.student.name;
+    document.getElementById('profileGrade').textContent = `${state.student.grade} | ${state.student.exam_target || state.student.board}`;
+  }
+  navigate(window.location.hash || '#dashboard');
+}
+
+async function initApp() {
+  const token = API.loadToken();
+  if (token) {
+    try {
+      const res = await API.verifyToken();
+      const stored = sessionStorage.getItem('studob_student');
+      if (stored) state.student = JSON.parse(stored);
+      showApp();
+      return;
+    } catch {
+      API.setToken(null);
+    }
+  }
+  document.getElementById('login-page').style.display = 'flex';
+}
+
+// ── PAGE ROUTER ──
 async function renderPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const el = document.getElementById('page-' + page.split('/')[0]);
+  const pageName = page.split('/')[0];
+  const el = document.getElementById('page-' + pageName);
   if (!el) { renderDashboard(); return; }
   el.classList.add('active');
   el.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
   try {
-    if (page === 'dashboard' || page === '') await renderDashboard();
-    else if (page === 'students') await renderStudents();
-    else if (page.startsWith('student/')) await renderStudentDetail(page.split('/')[1]);
-    else if (page === 'questions') await renderQuestions();
-    else if (page === 'practice') await renderPractice();
-    else if (page.startsWith('practice/')) await renderPracticeSession(page.split('/')[1]);
-    else if (page.startsWith('practice-results/')) await renderPracticeResults(page.split('/')[1]);
-    else if (page === 'assessment') await renderAssessment();
-    else if (page.startsWith('assessment/')) await renderAssessmentDetail(page.split('/')[1]);
-    else if (page.startsWith('analytics/')) await renderAnalytics(page.split('/')[1]);
-    else if (page === 'concepts') await renderConcepts();
+    if (pageName === 'dashboard' || pageName === '') await renderDashboard();
+    else if (pageName === 'practice') await renderPractice();
+    else if (pageName === 'practice-session') await renderPracticeSession();
+    else if (pageName === 'practice-results') await renderPracticeResults();
+    else if (pageName === 'assessment') await renderAssessment();
+    else if (pageName === 'concepts') await renderConcepts();
+    else if (pageName === 'analytics') await renderAnalytics();
+    else if (pageName === 'analytics-report') await renderAnalyticsReport(page.split('/')[1]);
     else renderDashboard();
   } catch (e) {
     el.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
   }
 }
 
-function fmtPct(v) { return Math.round(v); }
-function initials(name) { return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(); }
-function scoreClass(v) { return v >= 70 ? 'success' : v >= 40 ? 'warning' : 'danger'; }
-
-function scoreRing(pct, size, label) {
-  const r = 38; const circ = 2 * Math.PI * r;
-  const dash = Math.max(0, (pct / 100) * circ);
-  const cls = scoreClass(pct);
-  size = size || 100;
-  const r2 = Math.round(size * 0.38);
-  const circ2 = 2 * Math.PI * r2;
-  const dash2 = Math.max(0, (pct / 100) * circ2);
-  return `<div class="progress-circle" style="width:${size}px;height:${size}px">
-    <svg width="${size}" height="${size}" viewBox="0 0 100 100">
-      <circle class="bg" cx="50" cy="50" r="42"/>
-      <circle class="fg ${cls}" cx="50" cy="50" r="42" stroke-dasharray="${dash2} ${circ2}"/>
-    </svg>
-    <span class="pv" style="font-size:${Math.round(size*0.2)}px">${fmtPct(pct)}${label||'%'}</span>
-  </div>`;
-}
-
-// ── DASHBOARD ──
+// ── MODULE 1: DASHBOARD ──
 async function renderDashboard() {
   const el = document.getElementById('page-dashboard');
-  let students;
-  try { students = await API.listStudents(); } catch { students = []; }
-  state.students = students;
+  const sid = state.student?.id;
+  if (!sid) { el.innerHTML = '<div class="alert alert-warning">Please log in first</div>'; return; }
 
-  if (students.length === 0) {
-    el.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">+</div>
-        <h2 class="mt-3">Welcome to Studob</h2>
-        <p class="text-muted mb-3">Adaptive JEE Preparation Platform</p>
-        <button class="btn btn-primary" onclick="showCreateStudent()">Add Student</button>
-      </div>`;
-    return;
-  }
+  const [mastery, sessions] = await Promise.all([
+    API.getMastery(sid).catch(() => null),
+    API.getStudentSessions(sid).catch(() => []),
+  ]);
 
-  const selectedId = state.selectedStudentId || students[0].id;
-  state.selectedStudentId = selectedId;
-  let mastery, analytics, weakTopics;
-  try { mastery = await API.getMastery(selectedId); } catch { mastery = null; }
-  try { analytics = await API.getStudentAnalytics(selectedId); } catch { analytics = null; }
-  try { weakTopics = await API.getWeakTopics(selectedId); } catch { weakTopics = []; }
+  const overall_score = mastery ? mastery.overall_score : 0;
+  const weakList = mastery ? mastery.weak_topics || [] : [];
+  const strongList = mastery ? mastery.strengths || [] : [];
 
-  const student = students.find(s => s.id === selectedId) || students[0];
-  const overallScore = mastery ? mastery.overall_score : 0;
+  const assessments = (sessions || []).filter(s => s.session_type === 'assessment' && s.ended_at).slice(0, 5);
 
-  const sidebarList = students.map(s => `
-    <div class="student-item ${s.id === selectedId ? 'active' : ''}" onclick="switchStudent('${s.id}')">
-      <div class="student-avatar" onclick="event.stopPropagation();navigate('#student/${s.id}')" style="cursor:pointer">${initials(s.name)}</div>
-      <div>
-        <div style="font-weight:600;font-size:0.84rem;cursor:pointer" onclick="event.stopPropagation();navigate('#student/${s.id}')">${s.name}</div>
-        <div style="font-size:0.7rem;color:var(--on-surface-variant)">${s.grade} | ${s.exam_target || s.board}</div>
-      </div>
-    </div>`).join('');
+  const recommendedTopic = weakList.length > 0 ? weakList[0] : null;
 
   const subjectCards = mastery && mastery.subject_breakdown
     ? Object.entries(mastery.subject_breakdown).map(([subj, score]) =>
         `<div class="stat-card"><div class="stat-value">${fmtPct(score)}%</div><div class="stat-label" style="text-transform:capitalize">${subj}</div></div>`).join('')
     : '';
 
-  const weakList = mastery ? mastery.weak_topics || [] : [];
-  const strongList = mastery ? mastery.strengths || [] : [];
-
-  const sessions = analytics && analytics.recent_sessions ? analytics.recent_sessions.slice(0, 5) : [];
-  const avgQConf = analytics ? analytics.average_qconf || 0 : 0;
-
   el.innerHTML = `
-    <div class="split">
+    <div class="dash-header">
       <div>
-        <div class="card" style="padding:0.65rem">
-          <div class="label-sm mb-2" style="padding:0 0.5rem">Students</div>
-          ${sidebarList}
-        </div>
-        <div class="card" style="padding:0.65rem">
-          <button class="btn btn-primary btn-sm btn-block" onclick="showCreateStudent()">+ Add Student</button>
-        </div>
+        <h2>Welcome back, ${state.student?.name || 'Student'}</h2>
+        <p class="text-dim" style="font-size:0.84rem">${state.student?.grade || ''} | ${state.student?.exam_target || state.student?.board || 'JEE Aspirant'}</p>
       </div>
-      <div>
-        <div class="flex items-center justify-between mb-3 flex-wrap gap-1">
-          <h2>Dashboard</h2>
-          <div class="flex gap-1 flex-wrap">
-            <button class="btn btn-primary btn-sm" onclick="navigate('#practice')">Practice</button>
-            <button class="btn btn-success btn-sm" onclick="navigate('#assessment')">Assess</button>
-            <button class="btn btn-ghost btn-sm" onclick="navigate('#analytics/${selectedId}')">Analytics</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="flex items-center gap-3" style="flex-wrap:wrap">
-            ${scoreRing(overallScore, 100)}
-            <div class="flex-1">
-              <h3 style="margin-bottom:2px">${student.name}</h3>
-              <p class="text-dim" style="font-size:0.84rem">${student.grade} | ${student.board} | ${student.exam_target || 'No target'}</p>
-              <div class="flex gap-1 mt-1 flex-wrap">
-                <span class="badge badge-primary">${weakList.length} weak</span>
-                <span class="badge badge-success">${strongList.length} strong</span>
-                <span class="badge badge-info">${sessions.length} recent</span>
-              </div>
-            </div>
-          </div>
-          ${subjectCards ? `<div class="stat-row mt-2">${subjectCards}</div>` : ''}
-        </div>
-
-        <div class="row">
-          <div class="col">
-            <div class="card">
-              <div class="card-header">Weak Topics</div>
-              ${weakList.slice(0, 5).map(w => `
-                <div class="flex items-center justify-between" style="padding:0.4rem 0;border-bottom:1px solid var(--border-light)">
-                  <span style="font-size:0.84rem">${w.subtopic} (${w.subject})</span>
-                  <div class="flex items-center gap-2">
-                    <div class="progress" style="width:60px"><div class="progress-bar danger" style="width:${w.score}%"></div></div>
-                    <span style="font-weight:600;color:var(--danger);font-size:0.84rem">${fmtPct(w.score)}</span>
-                  </div>
-                </div>`).join('') || '<p class="text-dim">No weak topics identified</p>'}
-              ${weakList.length > 5 ? `<span class="text-dim" style="font-size:0.82rem">+ ${weakList.length - 5} more</span>` : ''}
-            </div>
-            <div class="card">
-              <div class="card-header">Strong Topics</div>
-              ${strongList.slice(0, 5).map(s => `
-                <div class="flex items-center justify-between" style="padding:0.4rem 0;border-bottom:1px solid var(--border-light)">
-                  <span style="font-size:0.84rem">${s.subtopic} (${s.subject})</span>
-                  <div class="flex items-center gap-2">
-                    <div class="progress" style="width:60px"><div class="progress-bar success" style="width:${s.score}%"></div></div>
-                    <span style="font-weight:600;color:var(--secondary);font-size:0.84rem">${fmtPct(s.score)}</span>
-                  </div>
-                </div>`).join('') || '<p class="text-dim">No strengths identified</p>'}
-            </div>
-          </div>
-          <div class="col">
-            <div class="card">
-              <div class="card-header">Question Confidence</div>
-              <div class="text-center">
-                ${scoreRing(avgQConf * 100, 80, '%')}
-                <p class="mt-1 text-dim" style="font-size:0.82rem">Avg QConf Score</p>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-header">Recent Sessions</div>
-              ${sessions.length ? sessions.map(s => `
-                <div class="session-item">
-                  <div class="flex justify-between">
-                    <span class="session-type" style="text-transform:capitalize">${s.session_type || 'practice'}</span>
-                    <span class="badge ${s.avg_score >= 60 ? 'badge-success' : 'badge-warning'}">${fmtPct(s.avg_score)}%</span>
-                  </div>
-                  <div class="session-meta">${s.subject || ''}${s.topic ? ' / ' + s.topic : ''}${s.created_at ? ' - ' + new Date(s.created_at).toLocaleDateString() : ''}</div>
-                </div>`).join('') : '<p class="text-dim" style="padding:0.5rem 0">No sessions yet</p>'}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
-function switchStudent(id) {
-  state.selectedStudentId = id;
-  renderDashboard();
-}
-
-// ── STUDENTS ──
-async function renderStudents() {
-  const el = document.getElementById('page-students');
-  const students = await API.listStudents();
-  el.innerHTML = `
-    <div class="flex items-center justify-between mb-3">
-      <h2>All Students</h2>
-      <button class="btn btn-primary" onclick="showCreateStudent()">+ Add Student</button>
+      <button class="btn btn-primary" onclick="navigate('#practice')">Start Practice</button>
     </div>
-    <div class="card" style="padding:0">
-      <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>Name</th><th>Grade</th><th>Board</th><th>Target</th><th>Lang</th><th></th></tr></thead>
-        <tbody>${students.map(s => `<tr>
-          <td><strong>${s.name}</strong></td>
-          <td>${s.grade}</td><td>${s.board}</td><td>${s.exam_target || '-'}</td><td>${s.language}</td>
-          <td>
-            <button class="btn btn-xs btn-ghost" onclick="navigate('#analytics/${s.id}')">Analytics</button>
-            <button class="btn btn-xs btn-danger" onclick="deleteStudent('${s.id}')">Del</button>
-          </td>
-        </tr>`).join('')}</tbody>
-      </table>
+
+    <div class="row mb-3">
+      <div class="col col-2">
+        <div class="card" style="display:flex;align-items:center;gap:var(--space-md);flex-wrap:wrap">
+          ${scoreRing(overall_score, 100)}
+          <div>
+            <h3 style="margin-bottom:2px">Overall Mastery</h3>
+            <p class="text-dim" style="font-size:0.84rem">${weakList.length} weak topics · ${strongList.length} strengths</p>
+          </div>
+        </div>
       </div>
-    </div>`;
-}
-
-async function renderStudentDetail(id) {
-  const el = document.getElementById('page-student');
-  const [student, mastery, sessions] = await Promise.all([
-    API.getStudent(id), API.getMastery(id),
-    API.getStudentSessions(id).catch(() => []),
-  ]);
-  const overallScore = mastery ? mastery.overall_score : 0;
-  const assessments = (sessions || []).filter(s => s.session_type === 'assessment');
-  const practice_sessions = (sessions || []).filter(s => s.session_type === 'practice');
-  const avgScore = assessments.length ? assessments.reduce((a,s) => a + (s.questions_count > 0 ? s.correct_count/s.questions_count*100 : 0), 0) / assessments.length : 0;
-
-  const assessHtml = assessments.length ? `
-    <div class="card">
-      <div class="card-header">Test Results <span class="badge badge-info">${assessments.length} tests</span></div>
-      <div class="table-wrap">
-        <table class="table table-condensed">
-          <thead><tr><th>Date</th><th>Score</th><th>Percentage</th><th>Mastery Δ</th><th></th></tr></thead>
-          <tbody>${assessments.map(s => {
-            const pct = s.questions_count > 0 ? Math.round(s.correct_count/s.questions_count*100) : 0;
-            return `<tr>
-              <td>${new Date(s.started_at).toLocaleDateString()}</td>
-              <td>${s.correct_count}/${s.questions_count}</td>
-              <td><span class="badge ${pct >= 60 ? 'badge-success' : pct >= 35 ? 'badge-warning' : 'badge-danger'}">${pct}%</span></td>
-              <td class="${s.mastery_delta >= 0 ? 'text-success' : 'text-danger'}" style="font-weight:600">${s.mastery_delta >= 0 ? '+' : ''}${s.mastery_delta.toFixed(1)}</td>
-              <td><button class="btn btn-xs btn-ghost" onclick="generateTestReport('${id}', '${s.id}')">Report</button></td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </div>
-    </div>` : '';
-
-  el.innerHTML = `
-    <div class="flex items-center justify-between mb-3 flex-wrap gap-1">
-      <h2>${student.name}</h2>
-      <div class="flex gap-1">
-        <button class="btn btn-primary btn-sm" onclick="navigate('#practice')">Practice</button>
-        <button class="btn btn-success btn-sm" onclick="navigate('#assessment')">Assess</button>
-        <button class="btn btn-ghost btn-sm" onclick="navigate('#analytics/${id}')">Analytics</button>
+      <div class="col">
+        <div class="card" style="display:flex;align-items:center;gap:var(--space-md);flex-wrap:wrap">
+          <div class="score-ring ${recommendedTopic ? 'warning' : 'success'}" style="width:56px;height:56px;font-size:0.9rem">
+            ${recommendedTopic ? '!' : '✓'}
+          </div>
+          <div>
+            <h4 style="margin-bottom:2px">${recommendedTopic ? `Study: ${recommendedTopic.subtopic}` : 'All caught up!'}</h4>
+            <p class="text-dim" style="font-size:0.78rem">${recommendedTopic ? `${recommendedTopic.subject} · ${fmtPct(recommendedTopic.score)}% mastery` : 'Great progress this week'}</p>
+          </div>
+        </div>
       </div>
     </div>
+
+    ${subjectCards ? `<div class="card"><div class="card-header">Subject Progress</div><div class="stat-row">${subjectCards}</div></div>` : ''}
+
     <div class="row">
       <div class="col">
-        <div class="card text-center">
-          ${scoreRing(overallScore, 120)}
-          <p class="mt-2 text-dim" style="font-size:0.84rem">${student.grade} | ${student.board} | ${student.exam_target || 'No target'}</p>
-          <p class="text-dim" style="font-size:0.78rem">${student.language} | ${student.id.slice(0,8)}</p>
-        </div>
         <div class="card">
-          <div class="card-header">Mastery by Subject</div>
-          ${mastery && mastery.subject_breakdown ? Object.entries(mastery.subject_breakdown).map(([subj, score]) => {
-            const c = scoreClass(score);
-            return `<div class="mb-2">
-              <div class="flex justify-between" style="font-size:0.82rem;margin-bottom:0.2rem"><span style="text-transform:capitalize">${subj}</span><span>${fmtPct(score)}%</span></div>
-              <div class="progress"><div class="progress-bar ${c}" style="width:${score}%"></div></div>
+          <div class="card-header">Recent Tests</div>
+          ${assessments.length ? assessments.map(s => {
+            const pct = s.questions_count > 0 ? Math.round(s.correct_count / s.questions_count * 100) : 0;
+            return `<div class="test-card" onclick="navigate('#analytics-report/${s.id}')">
+              <div class="test-card-top">
+                <span class="test-name">${s.subject || 'Test'} Assessment</span>
+                <span class="badge ${pct >= 60 ? 'badge-success' : pct >= 35 ? 'badge-warning' : 'badge-danger'}">${pct}%</span>
+              </div>
+              <div class="test-card-meta">
+                <span>${s.correct_count}/${s.questions_count}</span>
+                <span class="text-dim">${fmtDate(s.ended_at)}</span>
+              </div>
+              <button class="btn btn-xs btn-ghost test-view-btn">View →</button>
             </div>`;
-          }).join('') : '<p class="text-dim">No data</p>'}
+          }).join('') : '<p class="text-dim">No tests completed yet. Start an assessment to see results here.</p>'}
+          ${assessments.length > 0 ? `<button class="btn btn-ghost btn-sm btn-block mt-2" onclick="navigate('#analytics')">View All Reports →</button>` : ''}
         </div>
       </div>
       <div class="col">
         <div class="card">
           <div class="card-header">Weak Topics</div>
-          ${mastery ? mastery.weak_topics.slice(0, 8).map(w =>
-            `<div class="flex items-center justify-between" style="padding:0.3rem 0;border-bottom:1px solid var(--border-light);font-size:0.84rem">
-              <span>${w.subtopic} (${w.subject})</span>
-              <div class="flex items-center gap-2"><div class="progress" style="width:50px"><div class="progress-bar danger" style="width:${w.score}%"></div></div><span style="font-weight:600;color:var(--danger)">${fmtPct(w.score)}</span></div>
-            </div>`).join('') : '<p class="text-dim">No weak topics identified</p>'}
+          ${weakList.slice(0, 5).map(w => `
+            <div class="flex items-center justify-between" style="padding:0.4rem 0;border-bottom:1px solid var(--border-light)">
+              <span style="font-size:0.84rem">${w.subtopic}</span>
+              <div class="flex items-center gap-2">
+                <div class="progress" style="width:60px"><div class="progress-bar danger" style="width:${w.score}%"></div></div>
+                <span style="font-weight:600;color:var(--danger);font-size:0.84rem">${fmtPct(w.score)}</span>
+              </div>
+            </div>`).join('') || '<p class="text-dim">No weak topics identified</p>'}
         </div>
         <div class="card">
-          <div class="card-header">Recent Sessions (${sessions.length})</div>
-          <div style="max-height:200px;overflow-y:auto">
-            ${sessions.length ? sessions.slice(0, 8).map(s =>
-              `<div class="session-item">
-                <div class="flex justify-between">
-                  <span class="session-type" style="text-transform:capitalize">${s.session_type}</span>
-                  <span class="badge ${(s.questions_count ? Math.round(s.correct_count / s.questions_count * 100) : 0) >= 60 ? 'badge-success' : 'badge-warning'}">${s.questions_count ? Math.round(s.correct_count / s.questions_count * 100) : 0}%</span>
-                </div>
-                <div class="session-meta">${s.started_at ? new Date(s.started_at).toLocaleDateString() : ''}${s.ended_at ? ' - completed' : ' - active'}</div>
-              </div>`
-            ).join('') : '<p class="text-dim">No sessions yet</p>'}
-          </div>
+          <div class="card-header">Strengths</div>
+          ${strongList.slice(0, 5).map(s => `
+            <div class="flex items-center justify-between" style="padding:0.4rem 0;border-bottom:1px solid var(--border-light)">
+              <span style="font-size:0.84rem">${s.subtopic}</span>
+              <div class="flex items-center gap-2">
+                <div class="progress" style="width:60px"><div class="progress-bar success" style="width:${s.score}%"></div></div>
+                <span style="font-weight:600;color:var(--secondary);font-size:0.84rem">${fmtPct(s.score)}</span>
+              </div>
+            </div>`).join('') || '<p class="text-dim">No strengths identified yet</p>'}
         </div>
       </div>
-    </div>
-
-    <div class="row">
-      <div class="col">
-        ${assessHtml}
-      </div>
-      ${practice_sessions.length ? `
-      <div class="col">
-        <div class="card">
-          <div class="card-header">Practice Sessions <span class="badge badge-info">${practice_sessions.length}</span></div>
-          <div class="table-wrap">
-            <table class="table table-condensed">
-              <thead><tr><th>Date</th><th>Score</th><th>Mastery Δ</th></tr></thead>
-              <tbody>${practice_sessions.slice(0, 8).map(s => {
-                const pct = s.questions_count > 0 ? Math.round(s.correct_count/s.questions_count*100) : 0;
-                return `<tr><td>${new Date(s.started_at).toLocaleDateString()}</td><td>${s.correct_count}/${s.questions_count} (${pct}%)</td><td class="${s.mastery_delta >= 0 ? 'text-success' : 'text-danger'}">${s.mastery_delta >= 0 ? '+' : ''}${s.mastery_delta.toFixed(1)}</td></tr>`;
-              }).join('')}</tbody>
-            </table>
-          </div>
-        </div>
-      </div>` : ''}
     </div>`;
 }
 
-async function generateTestReport(studentId, sessionId) {
-  if (!sessionId) { alert('No assessment sessions available to generate report.'); return; }
-  try {
-    const response = await API.generateReport(studentId, sessionId);
-    if (response.html) {
-      const w = window.open('', '_blank');
-      w.document.write(response.html);
-      w.document.close();
-    }
-  } catch(e) {
-    alert('Failed to generate report: ' + e.message);
-  }
-}
-
-// ── QUESTIONS ──
-async function renderQuestions() {
-  const el = document.getElementById('page-questions');
-  const [appQs, testQs] = await Promise.all([API.listAppQuestions(), API.listTestQuestions()]);
-  el.innerHTML = `<h2 class="mb-3">Question Bank</h2>
-    <div class="tabs" id="qTabs">
-      <div class="tab active" onclick="switchQTab('app', this)">Practice (${appQs.length})</div>
-      <div class="tab" onclick="switchQTab('test', this)">Test (${testQs.length})</div>
-    </div>
-    <div id="qList">${renderQList(appQs, 'app')}</div>`;
-  window._appQs = appQs; window._testQs = testQs;
-}
-
-function switchQTab(type, tabEl) {
-  document.querySelectorAll('#qTabs .tab').forEach(t => t.classList.remove('active'));
-  tabEl.classList.add('active');
-  document.getElementById('qList').innerHTML = renderQList(type === 'app' ? window._appQs : window._testQs, type);
-}
-
-function renderQList(questions, type) {
-  if (!questions || !questions.length) return '<div class="alert alert-info">No questions found</div>';
-  return questions.map((q, i) => `<div class="question-card">
-    <div class="q-text">${i+1}. ${q.question_text}</div>
-    <div class="q-meta">
-      <span class="badge badge-primary">${q.subject}</span>
-      <span class="badge badge-info">${q.topic}</span>
-      <span class="badge badge-warning">${q.subtopic}</span>
-      <span class="badge ${q.difficulty <= 2 ? 'badge-success' : q.difficulty <= 3 ? 'badge-warning' : 'badge-danger'}">Lvl ${q.difficulty}</span>
-      ${type === 'test' ? `<span class="badge badge-neutral">${q.year || ''} ${q.exam_type || ''}</span>` : ''}
-    </div>
-    ${q.options ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:0.8rem;color:var(--on-surface-variant)">View Options</summary><div style="margin-top:6px;padding:8px;background:var(--surface-container);border-radius:6px;font-size:0.82rem">${Object.entries(q.options).map(([k,v]) => `<div><strong>${k}.</strong> ${v}</div>`).join('')}</div></details>` : ''}
-  </div>`).join('');
-}
-
-// ── PRACTICE ──
+// ── MODULE 2: PRACTICE ──
 async function renderPractice() {
   const el = document.getElementById('page-practice');
-  const students = state.students.length ? state.students : await API.listStudents();
-  state.students = students;
-  const sid = state.selectedStudentId || (students[0] && students[0].id) || '';
-  const mastery = sid ? await API.getMastery(sid) : null;
-  const weakTopics = mastery ? mastery.weak_topics || [] : [];
-  const studentOpts = students.map(s => `<option value="${s.id}" ${s.id === sid ? 'selected' : ''}>${s.name}</option>`).join('');
-  const weakOpts = weakTopics.map(w => `<option value="${w.subtopic}">${w.subtopic} (${w.subject}) — ${fmtPct(w.score)}%</option>`).join('');
+  const sid = state.student?.id;
+  if (!sid) { el.innerHTML = '<div class="alert alert-warning">Please log in first</div>'; return; }
 
-  el.innerHTML = `<h2 class="mb-3">Practice Session</h2>
+  const mastery = await API.getMastery(sid).catch(() => null);
+  const weakTopics = mastery ? mastery.weak_topics || [] : [];
+
+  el.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h2>Practice</h2>
+    </div>
     <div class="row">
-      <div class="col">
+      <div class="col col-2">
         <div class="card">
-          <div class="card-header">Configure Practice</div>
-          <div class="form-group"><label class="form-label">Student</label><select class="form-control" id="pStudent" onchange="updatePracticeTopics()">${studentOpts}</select></div>
-          <div class="form-group"><label class="form-label">Focus Concept</label><select class="form-control" id="pConcept">${weakOpts || '<option value="">Select a concept</option>'}<option value="kinematics">Kinematics</option><option value="newtons-laws">Newton\'s Laws</option><option value="electrostatics">Electrostatics</option><option value="differentiation">Differentiation</option><option value="integration">Integration</option><option value="chemical-bonding">Chemical Bonding</option><option value="organic-chemistry">Organic Chemistry</option></select></div>
-          <div class="form-group"><label class="form-label">Error Category</label><select class="form-control" id="pError"><option value="concept_misunderstood">Concept Misunderstood</option><option value="formula_recall_failure">Formula Recall Failure</option><option value="calculation_error">Calculation Error</option><option value="misread_question">Misread Question</option><option value="guessing">Guessing</option></select></div>
-          <div class="form-group"><label class="form-label">Questions</label><select class="form-control" id="pCount"><option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option></select></div>
+          <div class="card-header">Configure Session</div>
+          <div class="form-group">
+            <label class="form-label">Subject</label>
+            <select class="form-control" id="pSubject">
+              <option value="physics">Physics</option>
+              <option value="chemistry">Chemistry</option>
+              <option value="mathematics">Mathematics</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Chapter</label>
+            <select class="form-control" id="pTopic">
+              <option value="">All Chapters</option>
+              <option value="mechanics">Mechanics</option>
+              <option value="electrostatics">Electrostatics</option>
+              <option value="optics">Optics</option>
+              <option value="calculus">Calculus</option>
+              <option value="algebra">Algebra</option>
+              <option value="coordinate_geometry">Coordinate Geometry</option>
+              <option value="physical_chemistry">Physical Chemistry</option>
+              <option value="organic_chemistry">Organic Chemistry</option>
+              <option value="inorganic_chemistry">Inorganic Chemistry</option>
+            </select>
+          </div>
+          <div class="row">
+            <div class="col">
+              <div class="form-group">
+                <label class="form-label">Difficulty</label>
+                <select class="form-control" id="pDifficulty">
+                  <option value="0">All Levels</option>
+                  <option value="1">Level 1 (Easy)</option>
+                  <option value="2">Level 2</option>
+                  <option value="3">Level 3 (Medium)</option>
+                  <option value="4">Level 4</option>
+                  <option value="5">Level 5 (Hard)</option>
+                </select>
+              </div>
+            </div>
+            <div class="col">
+              <div class="form-group">
+                <label class="form-label">Questions</label>
+                <select class="form-control" id="pCount">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Time Limit</label>
+            <select class="form-control" id="pTime">
+              <option value="0">Unlimited</option>
+              <option value="15">15 Minutes</option>
+              <option value="30" selected>30 Minutes</option>
+              <option value="60">60 Minutes</option>
+              <option value="90">90 Minutes</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between" style="padding:0.5rem 0;border-bottom:1px solid var(--border-light);margin-bottom:0.75rem">
+            <span style="font-size:0.84rem;font-weight:500">Personalized</span>
+            <label class="toggle"><input type="checkbox" id="pPersonalized" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="flex items-center justify-between" style="padding:0.5rem 0;border-bottom:1px solid var(--border-light);margin-bottom:0.75rem">
+            <span style="font-size:0.84rem;font-weight:500">PYQ Only</span>
+            <label class="toggle"><input type="checkbox" id="pPyqOnly"><span class="toggle-slider"></span></label>
+          </div>
+          <div class="flex items-center justify-between" style="padding:0.5rem 0;margin-bottom:0.75rem">
+            <span style="font-size:0.84rem;font-weight:500">Challenge Mode</span>
+            <label class="toggle"><input type="checkbox" id="pChallenge"><span class="toggle-slider"></span></label>
+          </div>
           <button class="btn btn-primary btn-block" onclick="startPractice()">Start Practice</button>
         </div>
       </div>
       <div class="col">
+        ${weakTopics.length > 0 ? `
+        <div class="card">
+          <div class="card-header">Recommended Focus</div>
+          ${weakTopics.slice(0, 6).map(w => `
+            <div class="flex items-center justify-between" style="padding:0.35rem 0;border-bottom:1px solid var(--border-light);font-size:0.84rem">
+              <span>${w.subtopic} <span class="text-dim">(${w.subject})</span></span>
+              <span class="badge badge-danger">${fmtPct(w.score)}%</span>
+            </div>`).join('')}
+          <p class="text-dim mt-2" style="font-size:0.78rem">Personalized mode uses your weak areas to select questions</p>
+        </div>` : ''}
         <div class="card">
           <div class="card-header">How it works</div>
           <ul style="padding-left:1.2rem;color:var(--on-surface-variant);font-size:0.84rem;line-height:1.8">
-            <li>Adaptive questions target your identified weak areas</li>
-            <li>AI diagnosis classifies mistakes into 7 categories</li>
-            <li>Real-time mastery updates after each session</li>
-            <li>Focus on one concept at a time for best results</li>
+            <li>Select subject, chapter, and difficulty level</li>
+            <li>Toggle <strong>Personalized</strong> for adaptive questions</li>
+            <li>Enable <strong>PYQ Only</strong> for past JEE questions</li>
+            <li>Challenge Mode adds time pressure per question</li>
           </ul>
         </div>
       </div>
     </div>`;
 }
 
-async function updatePracticeTopics() {
-  const sid = document.getElementById('pStudent').value;
-  state.selectedStudentId = sid;
-  try {
-    const mastery = await API.getMastery(sid);
-    const weakTopics = mastery.weak_topics || [];
-    const sel = document.getElementById('pConcept');
-    const html = weakTopics.map(w => `<option value="${w.subtopic}">${w.subtopic} (${w.subject}) — ${fmtPct(w.score)}%</option>`).join('');
-    if (html) sel.innerHTML = html + '<option value="">Other concept...</option>';
-  } catch {}
-}
-
 async function startPractice() {
-  const studentId = document.getElementById('pStudent').value;
-  const concept = document.getElementById('pConcept').value;
-  const errorCategory = document.getElementById('pError').value;
+  const studentId = state.student.id;
+  const subject = document.getElementById('pSubject').value;
+  const topic = document.getElementById('pTopic').value;
+  const difficulty = parseInt(document.getElementById('pDifficulty').value);
   const qCount = parseInt(document.getElementById('pCount').value);
+  const personalized = document.getElementById('pPersonalized').checked;
+  const pyqOnly = document.getElementById('pPyqOnly').checked;
+  const challenge = document.getElementById('pChallenge').checked;
+
+  state.practiceConfig = { subject, topic, difficulty, qCount, personalized, pyqOnly, challenge };
+
   try {
     const session = await API.startSession({ student_id: studentId, session_type: 'practice' });
     state.currentSessionId = session.id;
-    const practice = await API.generatePractice({ student_id: studentId, session_id: session.id, target_concept: concept, error_category: errorCategory, question_count: qCount });
-    state.practiceQuestions = practice.questions;
-    state.practiceSessionId = practice.practice_session_id;
+
+    const practice = await API.generatePractice({
+      student_id: studentId,
+      session_id: session.id,
+      target_concept: topic || subject,
+      question_count: qCount,
+    });
+    state.practiceQuestions = practice.questions || [];
+    state.practiceSessionId = practice.practice_session_id || session.id;
     state.practiceStudentId = studentId;
-    state.practiceConcept = concept;
-    navigate(`#practice/${practice.practice_session_id}`);
-  } catch (e) { alert('Error: ' + e.message); }
+    navigate('#practice-session');
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
 }
 
-async function renderPracticeSession(sessionId) {
-  const el = document.getElementById('page-practice');
+// ── PRACTICE SESSION ──
+async function renderPracticeSession() {
+  const el = document.getElementById('page-practice-session');
   const questions = state.practiceQuestions || [];
   if (!questions.length) { navigate('#practice'); return; }
 
+  const config = state.practiceConfig || {};
   let currentIdx = 0;
   const answers = [];
   let startTime = Date.now();
+  let timerInterval;
+  const timeLimit = parseInt(config.time || '0');
 
   function renderQ() {
     const q = questions[currentIdx];
     const progress = (currentIdx / questions.length * 100);
     const opts = q.options ? Object.entries(q.options).map(([k, v]) =>
-      `<button class="option-btn" data-opt="${k}" onclick="selectPracticeOpt(this, '${k}')"><span class="option-label">${k}.</span> ${v}</button>`).join('') : '';
+      `<button class="option-btn" data-opt="${k}" onclick="selectOpt(this, '${k}')"><span class="option-label">${k}.</span> ${v}</button>`).join('') : '';
 
     el.innerHTML = `
       <div class="flex items-center justify-between mb-2 flex-wrap gap-1">
-        <h2 style="font-size:1.15rem">Practice: ${state.practiceConcept || ''}</h2>
-        <span class="badge badge-primary">${currentIdx + 1} / ${questions.length}</span>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-ghost btn-sm" onclick="navigate('#practice')" style="padding:0.25rem 0.5rem">← Back</button>
+          <h2 style="font-size:1.1rem">${config.subject || 'Practice'}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="timerDisplay" class="assessment-timer"></span>
+          <span class="badge badge-primary">Q${currentIdx + 1}/${questions.length}</span>
+        </div>
       </div>
       <div class="progress mb-3"><div class="progress-bar primary" style="width:${progress}%"></div></div>
       <div class="card">
-        <div class="q-text">${q.question_text}</div>
-        <div class="q-meta"><span class="badge badge-info">Lvl ${q.difficulty}/5</span><span class="badge badge-primary">${q.concept_reference || ''}</span></div>
+        <div class="q-meta" style="display:flex;gap:var(--space-sm);flex-wrap:wrap;margin-bottom:var(--space-sm)">
+          <span class="badge badge-info">${q.topic || config.topic || config.subject || ''}</span>
+          <span class="badge ${q.difficulty <= 2 ? 'badge-success' : q.difficulty <= 3 ? 'badge-warning' : 'badge-danger'}">Lvl ${q.difficulty}/5</span>
+          ${q.year ? `<span class="badge badge-neutral">PYQ ${q.year}</span>` : ''}
+        </div>
+        <div class="q-text" style="font-size:1rem;margin-bottom:var(--space-md)">${q.question_text}</div>
         <div id="practiceOpts">${opts}</div>
+        <div id="practiceFeedback" class="mt-2" style="display:none"></div>
         <div class="flex items-center justify-between mt-2">
           <button class="btn btn-ghost btn-sm" onclick="getPracticeHint(${q.id})">Hint</button>
           <div id="hintArea"></div>
-          <button class="btn btn-primary" id="nextBtn" onclick="submitPracticeAnswer(${q.id}, '${q.concept_reference || ''}', ${q.difficulty})">${currentIdx === questions.length - 1 ? 'Finish' : 'Next'}</button>
+          <button class="btn btn-primary" id="submitBtn" onclick="submitPracticeAnswer(${q.id})">${currentIdx === questions.length - 1 ? 'Finish' : 'Next'}</button>
         </div>
       </div>`;
-    window._practiceState = { answers, currentIdx, questions, startTime, sessionId };
+    window._practiceState = { answers, currentIdx, questions, startTime, sessionId: state.currentSessionId };
+
+    if (timeLimit > 0) {
+      const endTime = Date.now() + timeLimit * 60000;
+      if (!timerInterval) {
+        timerInterval = setInterval(() => {
+          const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+          const t = document.getElementById('timerDisplay');
+          if (t) t.textContent = `${Math.floor(remaining/60)}:${(remaining%60).toString().padStart(2,'0')}`;
+          if (remaining <= 0) { clearInterval(timerInterval); finishPractice(); }
+        }, 1000);
+      }
+    }
   }
   renderQ();
 }
 
-function selectPracticeOpt(el, opt) {
+window.selectOpt = function(el, opt) {
   document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
   window._selectedOpt = opt;
-}
+};
 
 async function getPracticeHint(qId) {
   try {
@@ -510,41 +463,49 @@ async function getPracticeHint(qId) {
   } catch {}
 }
 
-async function submitPracticeAnswer(qId, conceptRef, difficulty) {
+async function submitPracticeAnswer(qId) {
   const opt = window._selectedOpt || '';
   const ps = window._practiceState;
   if (!ps) return;
   const timeSec = (Date.now() - ps.startTime) / 1000;
   const q = ps.questions[ps.currentIdx];
   const isCorrect = opt === q.correct_answer;
-  ps.answers.push({ question_id: qId, subtopic: conceptRef || state.practiceConcept || '', subject: '', topic: '', is_correct: isCorrect, response_time_seconds: timeSec, hints_used: document.getElementById('hintArea').innerHTML ? 1 : 0, retry_count: 0, is_recurrence: false });
-  window._selectedOpt = null;
+
+  const submitBtn = document.getElementById('submitBtn');
+  if (submitBtn) submitBtn.disabled = true;
 
   const correct = q.correct_answer;
-  const opts = q.options ? Object.entries(q.options).map(([k, v]) => {
+  const optsHtml = q.options ? Object.entries(q.options).map(([k, v]) => {
     let cls = 'option-btn';
     if (k === correct) cls += ' correct';
     else if (k === opt && k !== correct) cls += ' wrong';
     if (k === opt) cls += ' selected';
     return `<div class="${cls}"><span class="option-label">${k}.</span> ${v}${k === correct ? ' <span style="float:right;font-size:0.7rem;color:var(--secondary)">Correct</span>' : ''}</div>`;
   }).join('') : '';
+  document.getElementById('practiceOpts').innerHTML = optsHtml;
 
-  el.innerHTML = `
-    <div class="flex items-center justify-between mb-2">
-      <h2 style="font-size:1.15rem">Practice: ${state.practiceConcept || ''}</h2>
-      <span class="badge ${isCorrect ? 'badge-success' : 'badge-danger'}">${isCorrect ? 'Correct' : 'Incorrect'}</span>
+  document.getElementById('practiceFeedback').style.display = 'block';
+  document.getElementById('practiceFeedback').innerHTML = `
+    <div class="hint-box" style="margin-top:0.5rem">
+      <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.25rem;color:${isCorrect ? 'var(--secondary)' : 'var(--danger)'}">${isCorrect ? '✓ Correct!' : '✗ Incorrect'}</div>
+      <div style="font-size:0.84rem;color:var(--on-surface-variant);line-height:1.6">${q.explanation || 'No explanation available.'}</div>
     </div>
-    <div class="card">
-      <div class="q-text">${q.question_text}</div>
-      <div style="margin-bottom:0.75rem">${opts}</div>
-      <div class="hint-box" style="margin-top:0">
-        <div style="font-weight:600;font-size:0.84rem;margin-bottom:0.25rem">Explanation</div>
-        <div style="font-size:0.84rem;color:var(--on-surface-variant);line-height:1.6">${q.explanation || 'No explanation available.'}</div>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:0.75rem">
-        <button class="btn btn-primary" onclick="continuePractice()">${ps.currentIdx + 1 >= ps.questions.length ? 'View Results' : 'Next Question'}</button>
-      </div>
+    <div style="margin-top:0.75rem;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="continuePractice()">${ps.currentIdx + 1 >= ps.questions.length ? 'View Results' : 'Next Question →'}</button>
     </div>`;
+
+  ps.answers.push({
+    question_id: qId,
+    subtopic: q.subtopic || q.topic || '',
+    subject: q.subject || '',
+    topic: q.topic || '',
+    is_correct: isCorrect,
+    response_time_seconds: timeSec,
+    hints_used: document.getElementById('hintArea').innerHTML ? 1 : 0,
+    retry_count: 0,
+    is_recurrence: false,
+    difficulty: q.difficulty,
+  });
 }
 
 window.continuePractice = function() {
@@ -552,50 +513,63 @@ window.continuePractice = function() {
   if (!ps) return;
   ps.currentIdx++;
   window._practiceState.startTime = Date.now();
-  if (ps.currentIdx >= ps.questions.length) finishPractice(ps.answers, ps.sessionId);
-  else renderPracticeSession(ps.sessionId);
+  window._selectedOpt = null;
+  if (ps.currentIdx >= ps.questions.length) finishPractice();
+  else renderPracticeSession();
 };
 
-async function finishPractice(answers, sessionId) {
+async function finishPractice() {
+  const ps = window._practiceState;
+  if (!ps) return;
   try {
-    await API.endSession(sessionId);
-    const r = await API.submitPracticeResult(sessionId, { student_id: state.practiceStudentId, attempts: answers });
+    await API.endSession(ps.sessionId);
+    const r = await API.submitPracticeResult(ps.sessionId, {
+      student_id: state.practiceStudentId || state.student.id,
+      attempts: ps.answers,
+    });
     state.lastPracticeResult = r;
-    navigate(`#practice-results/${sessionId}`);
-  } catch (e) { alert('Error: ' + e.message); }
+    navigate('#practice-results');
+  } catch (e) {
+    alert('Error: ' + e.message);
+    navigate('#practice');
+  }
 }
 
-async function renderPracticeResults(sessionId) {
-  const el = document.getElementById('page-practice');
+async function renderPracticeResults() {
+  const el = document.getElementById('page-practice-results');
   const r = state.lastPracticeResult;
   if (!r) { navigate('#practice'); return; }
-  const correct = r.attempts.filter(a => a.is_correct).length;
-  const total = r.attempts.length;
+
+  const correct = r.attempts ? r.attempts.filter(a => a.is_correct).length : 0;
+  const total = r.attempts ? r.attempts.length : 0;
   const pct = total ? Math.round(correct / total * 100) : 0;
-  const avgTime = total ? r.attempts.reduce((a, b) => a + b.response_time_seconds, 0) / total : 0;
+  const avgTime = total && r.attempts ? r.attempts.reduce((a, b) => a + b.response_time_seconds, 0) / total : 0;
 
   el.innerHTML = `
-    <h2 class="mb-3">Practice Complete</h2>
+    <div class="flex items-center justify-between mb-3">
+      <h2>Practice Complete</h2>
+      <button class="btn btn-ghost btn-sm" onclick="navigate('#practice')">Practice Again</button>
+    </div>
     <div class="row">
       <div class="col col-2">
-        <div class="card text-center">
-          ${scoreRing(pct, 120)}
-          <p class="mt-2" style="font-weight:600">${correct}/${total} Correct</p>
-          <p class="text-dim">Avg Time: ${avgTime.toFixed(0)}s/question</p>
+        <div class="card text-center" style="padding:var(--space-lg)">
+          ${scoreRing(pct, 130)}
+          <p class="mt-2" style="font-weight:600;font-size:1.05rem">${correct}/${total} Correct</p>
+          <p class="text-dim">Avg Time: ${avgTime.toFixed(0)}s per question</p>
           <p class="text-dim">Mastery Change: <span style="color:${r.mastery_delta >= 0 ? 'var(--secondary)' : 'var(--danger)'}">${r.mastery_delta >= 0 ? '+' : ''}${r.mastery_delta.toFixed(1)}</span></p>
         </div>
       </div>
       <div class="col">
         <div class="card">
-          <div class="card-header">Attempts</div>
+          <div class="card-header">Question Summary</div>
           <div class="table-wrap">
             <table class="table table-condensed">
-              <thead><tr><th>#</th><th>Result</th><th>Time</th><th>Hints</th></tr></thead>
-              <tbody>${r.attempts.map((a, i) => `<tr>
+              <thead><tr><th>#</th><th>Result</th><th>Time</th><th>Difficulty</th></tr></thead>
+              <tbody>${(r.attempts || []).map((a, i) => `<tr>
                 <td>Q${i+1}</td>
                 <td><span class="badge ${a.is_correct ? 'badge-success' : 'badge-danger'}">${a.is_correct ? 'Correct' : 'Wrong'}</span></td>
                 <td class="text-dim">${a.response_time_seconds.toFixed(0)}s</td>
-                <td class="text-dim">${a.hints_used || 0}</td>
+                <td><span class="badge badge-neutral">Lvl ${a.difficulty || '-'}</span></td>
               </tr>`).join('')}</tbody>
             </table>
           </div>
@@ -608,229 +582,96 @@ async function renderPracticeResults(sessionId) {
     </div>`;
 }
 
-// ── ASSESSMENT ──
+// ── ASSESSMENT (shown during practice as concept assessment) ──
 async function renderAssessment() {
   const el = document.getElementById('page-assessment');
-  const students = state.students.length ? state.students : await API.listStudents();
-  state.students = students;
-  const sid = state.selectedStudentId || (students[0] && students[0].id) || '';
-  const studentOpts = students.map(s => `<option value="${s.id}" ${s.id === sid ? 'selected' : ''}>${s.name}</option>`).join('');
-
-  el.innerHTML = `<h2 class="mb-3">Assessment</h2>
-    <div class="row">
-      <div class="col">
-        <div class="card">
-          <div class="card-header">Create Assessment</div>
-          <div class="form-group"><label class="form-label">Student</label><select class="form-control" id="aStudent">${studentOpts}</select></div>
-          <div class="form-group"><label class="form-label">Subject</label><select class="form-control" id="aSubject"><option value="physics">Physics</option><option value="chemistry">Chemistry</option><option value="mathematics">Mathematics</option></select></div>
-          <div class="form-group"><label class="form-label">Topic <span class="text-dim" style="font-weight:400">(optional)</span></label><select class="form-control" id="aTopic"><option value="">All topics</option><option value="mechanics">Mechanics</option><option value="electrostatics">Electrostatics</option><option value="optics">Optics</option><option value="calculus">Calculus</option><option value="algebra">Algebra</option><option value="coordinate_geometry">Coordinate Geometry</option><option value="physical_chemistry">Physical Chemistry</option><option value="organic_chemistry">Organic Chemistry</option><option value="inorganic_chemistry">Inorganic Chemistry</option></select></div>
-          <button class="btn btn-success btn-block" onclick="startAssessment()">Start Assessment</button>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card">
-          <div class="card-header">Guidelines</div>
-          <ul style="padding-left:1.2rem;color:var(--on-surface-variant);font-size:0.84rem;line-height:1.8">
-            <li>JEE-level questions from the test bank</li>
-            <li>Auto-selected by subject and topic</li>
-            <li>60-minute timer, topic-wise results</li>
-            <li>Mistakes diagnosed automatically</li>
-          </ul>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function startAssessment() {
-  const studentId = document.getElementById('aStudent').value;
-  const subject = document.getElementById('aSubject').value;
-  const topic = document.getElementById('aTopic').value;
-  try {
-    const body = { student_id: studentId, subject };
-    if (topic) body.topic = topic;
-    const assessment = await API.createAssessment(body);
-    state.assessmentId = assessment.id;
-    state.assessmentQuestions = assessment.questions || [];
-    navigate(`#assessment/${assessment.id}`);
-  } catch (e) { alert('Error: ' + e.message); }
-}
-
-async function renderAssessmentDetail(id) {
-  const el = document.getElementById('page-assessment');
-  const assessment = await API.getAssessment(id);
-  const questions = state.assessmentQuestions || assessment.questions || [];
-
-  if (assessment.status === 'completed') { renderAssessmentResults(id, assessment); return; }
-
-  let queue = questions.map((q, i) => ({ ...q, _idx: i }));
-  let correctCount = 0;
-  let totalAttempted = 0;
-  let currentIdx = 0;
-  const startTime = Date.now();
-  const timeLimit = 60;
-  let timerInterval;
-  let answered = false;
-
-  function renderQ() {
-    const q = queue[currentIdx];
-    if (!q) { finishAssessment(); return; }
-    const opts = q.options ? Object.entries(q.options).map(([k, v]) =>
-      `<button class="option-btn" data-opt="${k}" onclick="selectAssessOpt(this)"><span class="option-label">${k}.</span> ${v}</button>`).join('') : '';
-
-    let timerDisplay = '';
-    if (currentIdx === 0 && !timerInterval) {
-      const endTime = startTime + timeLimit * 60000;
-      timerDisplay = `<span class="assessment-timer" id="timerDisplay">${timeLimit}:00</span>`;
-      timerInterval = setInterval(() => {
-        const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
-        const t = document.getElementById('timerDisplay');
-        if (t) t.textContent = `${Math.floor(remaining/60)}:${(remaining%60).toString().padStart(2,'0')}`;
-        if (remaining <= 0) { clearInterval(timerInterval); finishAssessment(); }
-      }, 1000);
-    }
-
-    answered = false;
-    el.innerHTML = `
-      <div class="flex items-center justify-between mb-2 flex-wrap gap-1">
-        <h2 style="font-size:1.15rem">Assessment: ${assessment.subject}</h2>
-        ${timerDisplay}
-        <div class="flex gap-1">
-          <span class="badge badge-success">${correctCount} correct</span>
-          <span class="badge badge-primary">${queue.length} remaining</span>
-        </div>
-      </div>
-      <div class="card">
-        <div class="q-text">${q.question_text}</div>
-        <div class="q-meta"><span class="badge badge-info">Lvl ${q.difficulty}/5</span><span class="badge badge-primary">${q.subject} / ${q.topic}</span></div>
-        <div id="assessOpts">${opts}</div>
-        <div id="assessFeedback" class="mt-2"></div>
-        <div class="flex justify-between mt-2">
-          <button class="btn btn-primary" id="submitAnsBtn" onclick="submitAssessmentAnswer('${id}')">Submit Answer</button>
-        </div>
-      </div>`;
-    window._assessState = { queue, currentIdx, correctCount, totalAttempted, startTime, id, assessment, timerInterval };
-  }
-
-  window.selectAssessOpt = function(el) {
-    document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
-    el.classList.add('selected');
-  };
-
-  window.submitAssessmentAnswer = async function(aid) {
-    const selected = document.querySelector('.option-btn.selected');
-    if (!selected) { document.getElementById('assessFeedback').innerHTML = '<div class="alert alert-warning">Please select an option first.</div>'; return; }
-    if (answered) return;
-    answered = true;
-
-    const as = window._assessState;
-    const q = as.queue[as.currentIdx];
-    const chosen = selected.dataset.opt;
-    const isCorrect = chosen === q.correct_answer;
-    as.totalAttempted++;
-
-    // Submit to backend
-    try { await API.submitAnswer(aid, { question_id: q.id, student_answer: chosen || '' }); } catch {}
-
-    // Show feedback with correct answer highlighted
-    const opts = q.options ? Object.entries(q.options).map(([k, v]) => {
-      let cls = 'option-btn';
-      if (k === q.correct_answer) cls += ' correct';
-      else if (k === chosen && k !== q.correct_answer) cls += ' wrong';
-      if (k === chosen) cls += ' selected';
-      return `<div class="${cls}"><span class="option-label">${k}.</span> ${v}${k === q.correct_answer ? ' <span style="float:right;font-size:0.7rem;color:var(--secondary)">Correct</span>' : ''}</div>`;
-    }).join('') : '';
-
-    if (isCorrect) {
-      as.correctCount++;
-      as.queue.splice(as.currentIdx, 1);
-    } else {
-      const reQueue = as.queue.splice(as.currentIdx, 1)[0];
-      as.queue.push(reQueue);
-    }
-
-    document.getElementById('assessOpts').innerHTML = opts;
-    document.getElementById('submitAnsBtn').remove();
-    document.getElementById('assessFeedback').innerHTML = `
-      <div class="hint-box" style="margin-top:0.5rem">
-        <div style="font-weight:600;font-size:0.84rem;margin-bottom:0.25rem;color:${isCorrect ? 'var(--secondary)' : 'var(--danger)'}">${isCorrect ? 'Correct!' : 'Incorrect'}</div>
-        <div style="font-size:0.84rem;color:var(--on-surface-variant);line-height:1.6">${q.explanation || 'No explanation available.'}</div>
-      </div>
-      <div style="margin-top:0.75rem;display:flex;justify-content:flex-end">
-        <button class="btn btn-primary" onclick="nextAssessmentQ()">${as.queue.length === 0 ? 'View Results' : 'Next Question ->'}</button>
-      </div>`;
-
-    window._assessState = as;
-  };
-
-  window.nextAssessmentQ = function() {
-    const as = window._assessState;
-    if (!as) return;
-    if (as.queue.length === 0) { finishAssessment(); return; }
-    if (as.currentIdx >= as.queue.length) as.currentIdx = 0;
-    renderQ();
-  };
-
-  async function finishAssessment() {
-    clearInterval(window._assessState?.timerInterval);
-    const as = window._assessState;
-    if (!as) return;
-    try { await API.completeAssessment(as.id); } catch {}
-    const result = { total_questions: as.totalAttempted, correct: as.correctCount, incorrect: as.totalAttempted - as.correctCount, score_percentage: as.totalAttempted ? Math.round(as.correctCount / as.totalAttempted * 100) : 0, topic_breakdown: {} };
-    state.lastAssessmentResult = result;
-    renderAssessmentResults(as.id, result);
-  }
-
-  renderQ();
-}
-
-async function renderAssessmentResults(id, data) {
-  const el = document.getElementById('page-assessment');
-  const r = data.results || data;
-  const total = r.total_questions || data.total_questions || 0;
-  const correct = r.correct || data.correct || 0;
-  const score = r.score_percentage || data.score_percentage || 0;
-  const topicBreakdown = r.topic_breakdown || data.topic_breakdown || {};
-
-  clearInterval(window._assessState?.timerInterval);
-
-  const topicHtml = typeof topicBreakdown === 'object' && !Array.isArray(topicBreakdown)
-    ? Object.entries(topicBreakdown).map(([topic, info]) => {
-        const pct = typeof info === 'number' ? info : (info.correct / info.total * 100);
-        return `<div class="mb-2">
-          <div class="flex justify-between" style="font-size:0.82rem;margin-bottom:0.25rem"><span>${topic}</span><span>${fmtPct(pct)}%</span></div>
-          <div class="progress"><div class="progress-bar ${scoreClass(pct)}" style="width:${pct}%"></div></div>
-        </div>`;
-      }).join('') : '<p class="text-dim">No breakdown available</p>';
+  const sid = state.student?.id;
+  if (!sid) { el.innerHTML = '<div class="alert alert-warning">Please log in first</div>'; return; }
 
   el.innerHTML = `
-    <h2 class="mb-3">Assessment Complete</h2>
-    <div class="row">
-      <div class="col col-2">
-        <div class="card text-center">
-          ${scoreRing(score, 120)}
-          <p class="mt-2" style="font-weight:600">${correct} / ${total} correct</p>
-          <p class="text-dim">${total - correct} incorrect</p>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card">
-          <div class="card-header">Topic Breakdown</div>
-          ${topicHtml}
-        </div>
-      </div>
+    <div class="flex items-center justify-between mb-3">
+      <h2>Concept Assessment</h2>
     </div>
-    <div class="flex justify-center gap-1 mt-2">
-      <button class="btn btn-success" onclick="navigate('#assessment')">New Assessment</button>
-      <button class="btn btn-ghost" onclick="navigate('#dashboard')">Dashboard</button>
+    <div class="card">
+      <div class="card-header">Complete a Concept Assessment</div>
+      <p class="text-dim mb-3">Assessments are launched from the Concepts page. Select a concept and click "Complete Concept" to start a 30-question assessment.</p>
+      <button class="btn btn-primary" onclick="navigate('#concepts')">Go to Concepts</button>
     </div>`;
 }
 
+// ── MODULE 3: CONCEPTS ──
+async function renderConcepts() {
+  const el = document.getElementById('page-concepts');
+  const sid = state.student?.id;
+  if (!sid) { el.innerHTML = '<div class="alert alert-warning">Please log in first</div>'; return; }
 
-// ── ANALYTICS ──
-async function renderAnalytics(studentId) {
+  const [graphData, mastery] = await Promise.all([
+    API.getFullGraph().catch(() => ({ nodes: [], edges: [] })),
+    API.getMastery(sid).catch(() => null),
+  ]);
+
+  const nodes = graphData.nodes || [];
+  const subjects = [...new Set(nodes.map(n => n.subject))];
+  const masteryScores = mastery?.subject_breakdown || {};
+
+  let allHtml = '';
+  for (const subject of subjects) {
+    const subjectMastery = masteryScores[subject] || 0;
+    const subjectNodes = nodes.filter(n => n.subject === subject);
+    const topics = [...new Set(subjectNodes.map(n => n.topic))];
+
+    let topicHtml = '';
+    for (const topic of topics) {
+      const topicNodes = subjectNodes.filter(n => n.topic === topic);
+      let conceptHtml = topicNodes.map(n => {
+        const score = 0;
+        return `<div class="concept-card" onclick="startConceptAssessment('${n.id}', '${n.display_name || n.subtopic}')">
+          <div class="concept-card-top">
+            <span class="concept-name">${n.display_name || n.subtopic}</span>
+            <span class="concept-status status-not-started">Not Started</span>
+          </div>
+          <div class="progress mt-1"><div class="progress-bar primary" style="width:0%"></div></div>
+          <div class="concept-card-meta">
+            <span class="text-dim">0 questions solved</span>
+            <span class="badge badge-neutral">Lvl ${n.difficulty || '-'}</span>
+          </div>
+        </div>`;
+      }).join('');
+
+      topicHtml += `
+        <div class="topic-section">
+          <h4 class="topic-header">${topic}</h4>
+          <div class="concept-grid">${conceptHtml}</div>
+        </div>`;
+    }
+
+    allHtml += `
+      <div class="subject-section">
+        <div class="subject-header">
+          <h3>${subject.charAt(0).toUpperCase() + subject.slice(1)}</h3>
+          <span class="badge badge-primary">${fmtPct(subjectMastery)}%</span>
+        </div>
+        ${topicHtml}
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h2>Concepts</h2>
+      <span class="text-dim" style="font-size:0.84rem">${nodes.length} concepts</span>
+    </div>
+    ${allHtml || '<div class="alert alert-info">No concepts loaded yet.</div>'}`;
+}
+
+window.startConceptAssessment = function(conceptId, conceptName) {
+  alert(`Concept assessment for "${conceptName}" will be available soon.`);
+};
+
+// ── MODULE 4: ANALYTICS ──
+async function renderAnalytics() {
   const el = document.getElementById('page-analytics');
-  const sid = studentId || state.selectedStudentId || '';
-  if (!sid) { el.innerHTML = '<div class="alert alert-warning">Select a student first</div>'; return; }
+  const sid = state.student?.id;
+  if (!sid) { el.innerHTML = '<div class="alert alert-warning">Please log in first</div>'; return; }
 
   const [analytics, mastery, sessions] = await Promise.all([
     API.getStudentAnalytics(sid).catch(() => null),
@@ -838,65 +679,71 @@ async function renderAnalytics(studentId) {
     API.getStudentSessions(sid).catch(() => []),
   ]);
 
-  if (!analytics) {
-    el.innerHTML = `<div class="alert alert-warning">No analytics data available yet. Complete some sessions first.</div>`;
-    return;
-  }
+  const sortedSessions = (sessions || []).filter(s => s.ended_at).sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+  const assessments = sortedSessions.filter(s => s.session_type === 'assessment');
+  const practice_sessions = sortedSessions.filter(s => s.session_type === 'practice');
 
-  // Trend data from sessions
-  const sortedSessions = (sessions || []).filter(s => s.ended_at).sort((a,b) => new Date(a.started_at) - new Date(b.started_at));
-  const trendPoints = sortedSessions.slice(-20).map(s => {
-    const pct = s.questions_count > 0 ? Math.round(s.correct_count/s.questions_count*100) : 0;
-    return { date: new Date(s.started_at).toLocaleDateString(), score: pct, mastery: s.mastery_delta || 0 };
-  });
-  const trendHtml = trendPoints.length ? trendPoints.map((p, i) =>
-    `<div class="flex items-center justify-between" style="font-size:0.78rem;padding:0.2rem 0;border-bottom:1px solid var(--border-light)">
-      <span class="text-dim">${p.date}</span>
-      <span><span class="badge ${p.score >= 60 ? 'badge-success' : 'badge-warning'}">${p.score}%</span> <span class="${p.mastery >= 0 ? 'text-success' : 'text-danger'}">${p.mastery >= 0 ? '+' : ''}${p.mastery.toFixed(1)}</span></span>
-    </div>`).join('') : '<p class="text-dim">Not enough data</p>';
+  const recentTests = assessments.slice(0, 5);
 
-  const weakStr = Array.isArray(analytics.weak_topics) ? analytics.weak_topics.join(', ') : 'None identified';
-  const strongStr = Array.isArray(analytics.strengths) ? analytics.strengths.join(', ') : 'None identified';
+  const trendSessions = [...sortedSessions].reverse().slice(-30);
 
-  // Mastery by subject trend
-  const subjTrend = mastery && mastery.subject_breakdown ? Object.entries(mastery.subject_breakdown).map(([subj, score]) =>
-    `<div class="stat-card"><div class="stat-value">${fmtPct(score)}%</div><div class="stat-label" style="text-transform:capitalize">${subj}</div></div>`
-  ).join('') : '';
+  const weakStr = Array.isArray(analytics?.weak_topics) ? analytics.weak_topics.join(', ') : 'None identified';
+  const strongStr = Array.isArray(analytics?.strengths) ? analytics.strengths.join(', ') : 'None identified';
 
-  // Compute consistency
-  const today = new Date();
-  const weeklySessions = sortedSessions.filter(s => (today - new Date(s.started_at)) < 7*24*60*60*1000).length;
-
-  // Compute practice frequency
-  const dailyCounts = {};
-  sortedSessions.forEach(s => {
-    const d = new Date(s.started_at).toLocaleDateString();
-    dailyCounts[d] = (dailyCounts[d] || 0) + 1;
-  });
+  const subjBreakdown = mastery?.subject_breakdown || {};
 
   el.innerHTML = `
-    <div class="flex items-center justify-between mb-3 flex-wrap gap-1">
+    <div class="flex items-center justify-between mb-3">
       <h2>Analytics</h2>
-      <select class="form-control student-selector" onchange="navigate('#analytics/'+this.value)">
-        ${state.students.map(s => `<option value="${s.id}" ${s.id===sid?'selected':''}>${s.name}</option>`).join('')}
-      </select>
+      <span class="text-dim" style="font-size:0.82rem">${assessments.length} tests · ${practice_sessions.length} practice sessions</span>
     </div>
 
     <div class="row">
       <div class="col col-2">
         <div class="card">
-          ${scoreRing(analytics.overall_mastery || 0, 100)}
-          <div class="text-center mt-2">
-            <p style="font-weight:600">Overall Mastery</p>
-            <p class="text-dim" style="font-size:0.82rem">${weeklySessions} sessions this week</p>
-          </div>
+          <div class="card-header">Recent Tests</div>
+          ${recentTests.length ? recentTests.map(s => {
+            const pct = s.questions_count > 0 ? Math.round(s.correct_count / s.questions_count * 100) : 0;
+            return `<div class="test-card" onclick="navigate('#analytics-report/${s.id}')">
+              <div class="test-card-top">
+                <span class="test-name">${s.subject || 'Test'}</span>
+                <span class="badge ${pct >= 60 ? 'badge-success' : pct >= 35 ? 'badge-warning' : 'badge-danger'}">${pct}%</span>
+              </div>
+              <div class="test-card-meta">
+                <span>${s.correct_count}/${s.questions_count} · ${fmtDate(s.ended_at)}</span>
+                <span class="text-dim">${s.mastery_delta >= 0 ? '+' : ''}${(s.mastery_delta || 0).toFixed(1)} mastery</span>
+              </div>
+            </div>`;
+          }).join('') : '<p class="text-dim">No tests completed yet</p>'}
+          ${assessments.length > 5 ? `<p class="text-dim mt-1" style="font-size:0.78rem">+ ${assessments.length - 5} more tests</p>` : ''}
         </div>
       </div>
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Overall Mastery</div>
+          ${scoreRing(analytics?.overall_mastery || 0, 100)}
+          <p class="text-center text-dim mt-1" style="font-size:0.82rem">${sortedSessions.length} total sessions</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Subject Breakdown</div>
+      <div class="stat-row">
+        ${Object.entries(subjBreakdown).length ? Object.entries(subjBreakdown).map(([subj, score]) =>
+          `<div class="stat-card"><div class="stat-value">${fmtPct(score)}%</div><div class="stat-label" style="text-transform:capitalize">${subj}</div></div>`
+        ).join('') : '<p class="text-dim">No data</p>'}
+      </div>
+    </div>
+
+    <div class="row">
       <div class="col">
         <div class="card">
           <div class="card-header">Weak Areas</div>
           <p class="text-dim">${weakStr}</p>
         </div>
+      </div>
+      <div class="col">
         <div class="card">
           <div class="card-header">Strengths</div>
           <p class="text-dim">${strongStr}</p>
@@ -904,143 +751,90 @@ async function renderAnalytics(studentId) {
       </div>
     </div>
 
-    ${subjTrend ? `
-    <div class="card">
-      <div class="card-header">Mastery by Subject</div>
-      <div class="stat-row">${subjTrend}</div>
-    </div>` : ''}
-
     <div class="row">
       <div class="col">
         <div class="card">
           <div class="card-header">Score Trend</div>
-          <div style="max-height:300px;overflow-y:auto">${trendHtml}</div>
+          <div style="max-height:300px;overflow-y:auto">
+            ${trendSessions.slice(-20).map(s => {
+              const pct = s.questions_count > 0 ? Math.round(s.correct_count / s.questions_count * 100) : 0;
+              return `<div class="flex items-center justify-between" style="font-size:0.78rem;padding:0.25rem 0;border-bottom:1px solid var(--border-light)">
+                <span class="text-dim">${fmtDate(s.started_at)}</span>
+                <span><span class="badge ${pct >= 60 ? 'badge-success' : pct >= 35 ? 'badge-warning' : 'badge-danger'}">${pct}%</span></span>
+              </div>`;
+            }).join('') || '<p class="text-dim">Not enough data</p>'}
+          </div>
         </div>
       </div>
       <div class="col">
         <div class="card">
-          <div class="card-header">Question Confidence</div>
-          ${analytics.average_qconf !== undefined ? `
-            <div class="text-center mb-2">
-              ${scoreRing(analytics.average_qconf * 100, 90, '%')}
-              <p class="mt-1 text-dim" style="font-size:0.82rem">Avg QConf</p>
-            </div>
-            <div class="flex justify-between" style="font-size:0.84rem;padding:0.3rem 0">
-              <span class="text-success">High</span>
-              <span>${analytics.qconf_distribution?.high || 0}</span>
-            </div>
-            <div class="flex justify-between" style="font-size:0.84rem;padding:0.3rem 0">
-              <span class="text-warning">Medium</span>
-              <span>${analytics.qconf_distribution?.medium || 0}</span>
-            </div>
-            <div class="flex justify-between" style="font-size:0.84rem;padding:0.3rem 0">
-              <span class="text-danger">Low</span>
-              <span>${analytics.qconf_distribution?.low || 0}</span>
-            </div>`
-          : '<p class="text-dim">No confidence data yet</p>'}
+          <div class="card-header">Recommendations</div>
+          <p class="text-dim">${analytics?.practice_recommendation || 'Complete more practice to receive AI-powered recommendations.'}</p>
+        </div>
+        <div class="card">
+          <div class="card-header">Best Test</div>
+          ${assessments.length ? (() => {
+            const best = assessments.reduce((a, b) => Math.max(a, b.questions_count > 0 ? b.correct_count/b.questions_count : 0), 0);
+            const bestSession = assessments.find(s => (s.questions_count > 0 ? s.correct_count/s.questions_count : 0) === best);
+            if (bestSession) {
+              const pct = Math.round(best * 100);
+              return `<p class="text-dim">${fmtPct(pct)}% · ${bestSession.subject || 'Test'} · ${fmtDate(bestSession.ended_at)}</p>`;
+            }
+            return '<p class="text-dim">No tests yet</p>';
+          })() : '<p class="text-dim">No tests yet</p>'}
         </div>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">Recommendation</div>
-      <p class="text-dim">${analytics.practice_recommendation || 'Complete more practice to receive AI-powered recommendations.'}</p>
     </div>`;
 }
 
-// ── CONCEPT MAP ──
-async function renderConcepts() {
-  const el = document.getElementById('page-concepts');
-  let graphData;
-  try { graphData = await API.getFullGraph(); } catch {
-    el.innerHTML = '<div class="alert alert-danger">Failed to load concept graph</div>'; return;
+// ── ANALYTICS REPORT (per test session) ──
+async function renderAnalyticsReport(sessionId) {
+  const el = document.getElementById('page-analytics-report');
+  if (!sessionId) { navigate('#analytics'); return; }
+
+  const session = await API.getSession(sessionId).catch(() => null);
+  if (!session) {
+    el.innerHTML = '<div class="alert alert-danger">Session not found</div>';
+    return;
   }
-  const nodes = graphData.nodes || [];
-  const edges = graphData.edges || [];
-  const subjects = [...new Set(nodes.map(n => n.subject))];
-  const subjectTabs = subjects.map((s, i) => `<div class="tab ${i === 0 ? 'active' : ''}" onclick="filterConcepts(this, '${s}')">${s}</div>`).join('');
+
+  const pct = session.questions_count > 0 ? Math.round(session.correct_count / session.questions_count * 100) : 0;
 
   el.innerHTML = `
     <div class="flex items-center justify-between mb-3">
-      <h2>Concept Map</h2>
-      <span class="text-dim" style="font-size:0.82rem">${nodes.length} concepts · ${edges.length} prerequisite links</span>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="navigate('#analytics')">← Back</button>
+        <h2 style="font-size:1.1rem">${session.subject || 'Test'} Report</h2>
+      </div>
+      <span class="badge badge-info">${fmtDate(session.ended_at)}</span>
     </div>
-    <div class="card" style="padding:0.75rem">
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem">
-        <input class="form-control" id="conceptSearch" placeholder="Search concepts..." oninput="filterConceptsByName(this.value)" style="max-width:300px">
+    <div class="row">
+      <div class="col col-2">
+        <div class="card text-center" style="padding:var(--space-lg)">
+          ${scoreRing(pct, 130)}
+          <p class="mt-2" style="font-weight:600;font-size:1.05rem">${session.correct_count}/${session.questions_count}</p>
+          <p class="text-dim">Mastery Change: <span style="color:${(session.mastery_delta || 0) >= 0 ? 'var(--secondary)' : 'var(--danger)'}">${(session.mastery_delta || 0) >= 0 ? '+' : ''}${(session.mastery_delta || 0).toFixed(1)}</span></p>
+        </div>
       </div>
-      <div class="tabs" id="conceptTabs">${subjectTabs}</div>
-      <div id="conceptList" class="grid-auto"></div>
-    </div>`;
-  window._graphNodes = nodes;
-  window._graphEdges = edges;
-  filterConcepts(document.querySelector('#conceptTabs .tab'), subjects[0]);
-}
-
-function filterConcepts(tabEl, subject) {
-  document.querySelectorAll('#conceptTabs .tab').forEach(t => t.classList.remove('active'));
-  tabEl.classList.add('active');
-  const nodes = window._graphNodes.filter(n => n.subject === subject);
-  document.getElementById('conceptList').innerHTML = nodes.length
-    ? nodes.map(n => `<div class="card" style="padding:0.75rem;margin:0">
-        <div style="font-weight:600;font-size:0.85rem">${n.display_name || n.id}</div>
-        <div class="text-dim" style="font-size:0.72rem;margin-top:2px">${n.topic} / ${n.subtopic}</div>
-        <div style="margin-top:4px"><span class="badge badge-neutral">${n.difficulty ? 'Lvl '+n.difficulty : ''}</span></div>
-      </div>`).join('')
-    : '<p class="text-dim" style="padding:1rem;text-align:center">No concepts found in this subject</p>';
-}
-
-function filterConceptsByName(query) {
-  const q = query.toLowerCase();
-  const nodes = window._graphNodes.filter(n => (n.display_name || n.id).toLowerCase().includes(q) || (n.subtopic || '').toLowerCase().includes(q));
-  const activeSubject = document.querySelector('#conceptTabs .tab.active');
-  if (activeSubject) activeSubject.classList.remove('active');
-  document.getElementById('conceptList').innerHTML = nodes.length
-    ? nodes.map(n => `<div class="card" style="padding:0.75rem;margin:0">
-        <div style="font-weight:600;font-size:0.85rem">${n.display_name || n.id}</div>
-        <div class="text-dim" style="font-size:0.72rem;margin-top:2px">${n.subject} / ${n.topic}</div>
-        <div style="margin-top:4px"><span class="badge badge-neutral">${n.difficulty ? 'Lvl '+n.difficulty : ''}</span></div>
-      </div>`).join('')
-    : '<p class="text-dim" style="padding:1rem;text-align:center">No concepts match your search</p>';
-}
-
-// ── MODAL / CREATE STUDENT ──
-function showCreateStudent() {
-  const overlay = document.getElementById('modalOverlay');
-  overlay.innerHTML = `
-    <div class="modal">
-      <h3>Create Student</h3>
-      <div class="form-group"><label class="form-label">Name</label><input class="form-control" id="sName" placeholder="Full name"></div>
-      <div class="form-group"><label class="form-label">Grade</label><select class="form-control" id="sGrade"><option value="11">11</option><option value="12">12</option></select></div>
-      <div class="form-group"><label class="form-label">Board</label><select class="form-control" id="sBoard"><option value="CBSE">CBSE</option><option value="ICSE">ICSE</option><option value="State Board">State Board</option></select></div>
-      <div class="form-group"><label class="form-label">Exam Target</label><select class="form-control" id="sTarget"><option value="JEE_Main">JEE Main</option><option value="JEE_Advanced">JEE Advanced</option></select></div>
-      <div class="form-group"><label class="form-label">Language</label><select class="form-control" id="sLang"><option value="English">English</option><option value="Hindi">Hindi</option></select></div>
-      <div class="flex justify-between mt-3">
-        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="createStudent()">Create</button>
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Summary</div>
+          <div class="info-grid">
+            <div class="info-item"><div class="info-label">Total Questions</div><div class="info-value">${session.questions_count || 0}</div></div>
+            <div class="info-item"><div class="info-label">Correct</div><div class="info-value" style="color:var(--secondary)">${session.correct_count || 0}</div></div>
+            <div class="info-item"><div class="info-label">Incorrect</div><div class="info-value" style="color:var(--danger)">${(session.questions_count || 0) - (session.correct_count || 0)}</div></div>
+            <div class="info-item"><div class="info-label">Accuracy</div><div class="info-value">${pct}%</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">Recommendations</div>
+          <p class="text-dim">Complete more practice sessions in weak areas to improve your score. Focus on concepts where you made mistakes.</p>
+        </div>
       </div>
     </div>`;
-  overlay.classList.add('open');
 }
 
-function closeModal() {
-  document.getElementById('modalOverlay').classList.remove('open');
-}
-
-async function createStudent() {
-  const name = document.getElementById('sName').value.trim();
-  if (!name) { alert('Name is required'); return; }
-  try {
-    await API.createStudent({ name, grade: document.getElementById('sGrade').value, board: document.getElementById('sBoard').value, exam_target: document.getElementById('sTarget').value, language: document.getElementById('sLang').value });
-    closeModal();
-    navigate('#students');
-  } catch (e) { alert('Error: ' + e.message); }
-}
-
-async function deleteStudent(id) {
-  if (!confirm('Delete this student and all associated data?')) return;
-  try {
-    await API.deleteStudent(id);
-    navigate('#students');
-  } catch (e) { alert('Error: ' + e.message); }
-}
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
