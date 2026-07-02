@@ -121,6 +121,7 @@ class Attempt(Base):
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     answered_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    question_confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     student: Mapped["Student"] = relationship("Student", back_populates="attempts")
 

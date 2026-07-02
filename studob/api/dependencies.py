@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from studob.analytics import AnalyticsService
 from studob.analytics.mastery_trends import MasteryTrendService
-from studob.analytics.mistake_patterns import MistakePatternService
 from studob.analytics.session_reports import SessionReportService
+from studob.confidence import ConfidenceService, ConfidenceAnalytics
 from studob.assessment import AnswerEvaluator, AnswerTagger, AssessmentEngine
 from studob.config.loader import Settings, get_config
 from studob.content_engine import ContentEngineService
@@ -50,6 +50,7 @@ class AppContext:
         self.content_engine: ContentEngineService | None = None
         self.assessment: AssessmentEngine | None = None
         self.analytics: AnalyticsService | None = None
+        self.confidence: ConfidenceService | None = None
 
     async def initialize(self, settings: Settings) -> None:
         self.db_engine = DatabaseEngine(
@@ -134,14 +135,16 @@ class AppContext:
             mastery_service=self.mastery,
         )
 
+        self.confidence = ConfidenceService()
+
         mastery_trends = MasteryTrendService(session_factory)
-        mistake_patterns_analytics = MistakePatternService(session_factory)
         session_reports = SessionReportService(session_factory)
+        confidence_analytics = ConfidenceAnalytics()
         self.analytics = AnalyticsService(
             mastery_trends=mastery_trends,
-            mistake_patterns=mistake_patterns_analytics,
             session_reports=session_reports,
             mastery_service=self.mastery,
+            confidence_analytics=confidence_analytics,
         )
 
 

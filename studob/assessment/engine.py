@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from studob.assessment.evaluator import AnswerEvaluator
 from studob.assessment.tagger import AnswerTagger
+from studob.confidence import ConfidenceCalculator
 from studob.config.loader import Settings, get_config
 from studob.database.models import AppQuestion, TestQuestion
 from studob.exceptions import AssessmentError, NotFoundError
@@ -28,6 +29,7 @@ class AssessmentEngine:
         tagger: AnswerTagger,
         config: Settings | None = None,
         mastery_service: MasteryService | None = None,
+        confidence_calculator: ConfidenceCalculator | None = None,
     ):
         self._session_factory = session_factory
         self._test_question_service = test_question_service
@@ -36,6 +38,7 @@ class AssessmentEngine:
         self._tagger = tagger
         self._config = config or get_config()
         self._mastery = mastery_service
+        self._confidence_calculator = confidence_calculator or ConfidenceCalculator()
 
     async def create_assessment(self, data: AssessmentCreate) -> AssessmentResponse:
         question_ids = data.question_ids
@@ -196,6 +199,14 @@ class AssessmentEngine:
             for a in attempts:
                 subtopic = await self._extract_subtopic(a.question_id)
                 if subtopic:
+                    qconf = self._confidence_calculator.compute(
+                        is_correct=a.is_correct,
+                        response_time_seconds=a.response_time_seconds,
+                        hints_used=a.hints_used,
+                        retry_count=a.retry_count,
+                        difficulty=1,
+                        is_recurrence=False,
+                    )
                     signals = {
                         "correctness": 1.0 if a.is_correct else 0.0,
                         "response_time_ratio": min(a.response_time_seconds / 30.0, 2.0),
@@ -204,6 +215,7 @@ class AssessmentEngine:
                         "recurrence_flag": 0,
                         "subject": "",
                         "topic": "",
+                        "qconf_score": qconf.score,
                     }
                     updated = await self._mastery.update_mastery(
                         session.student_id, subtopic, signals

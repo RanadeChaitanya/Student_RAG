@@ -31,6 +31,8 @@ class AttemptCreate(BaseModel):
     hints_used: int = Field(0, description="Number of hints used")
     retry_count: int = Field(0, description="Number of retries")
     session_id: str = Field(..., description="Session identifier")
+    difficulty: int = Field(1, ge=1, le=5, description="Question difficulty level (1-5)")
+    is_recurrence: bool = Field(False, description="Whether this error is a recurrence")
 
 
 class AttemptResponse(BaseModel):
@@ -44,3 +46,4 @@ class AttemptResponse(BaseModel):
     retry_count: int = Field(..., description="Number of retries")
     answered_at: datetime = Field(..., description="Timestamp of the attempt")
     session_id: str | None = Field(None, description="Session identifier")
+    question_confidence_score: float | None = Field(None, ge=0.0, le=1.0, description="Question Confidence Score (0-1)")

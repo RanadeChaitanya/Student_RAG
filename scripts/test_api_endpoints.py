@@ -195,7 +195,7 @@ async def test_all():
         check("GET /analytics/student/{id} returns 200", r.status_code == 200)
         an = r.json()
         check("Analytics has overall_mastery", "overall_mastery" in an)
-        check("Analytics has mistake_patterns", "mistake_patterns" in an)
+        check("Analytics has average_qconf", "average_qconf" in an)
         check("Analytics has weak_topics", "weak_topics" in an)
         check("Analytics has strengths", "strengths" in an)
         check("Analytics has practice_recommendation", "practice_recommendation" in an)

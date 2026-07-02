@@ -19,22 +19,19 @@ class MasteryTrendResponse(BaseModel):
     period_days: int = Field(..., description="Number of days covered by the trend")
 
 
-class MistakePatternSummary(BaseModel):
-    error_category: str = Field(..., description="Error category name")
-    count: int = Field(..., description="Number of occurrences")
-    frequency_percent: float = Field(..., description="Frequency as percentage of total mistakes")
-    common_concepts: list[str] = Field(..., description="Concepts most associated with this error")
-
-
 class StudentAnalyticsResponse(BaseModel):
     student_id: str = Field(..., description="Student identifier")
     overall_mastery: float = Field(..., description="Overall weighted mastery score")
     mastery_trend: list[MasteryTrendPoint] = Field(..., description="Recent mastery trend")
-    mistake_patterns: list[MistakePatternSummary] = Field(
-        ..., description="Pattern analysis of mistakes"
-    )
     weak_topics: list[str] = Field(..., description="Topics identified as weak")
     strengths: list[str] = Field(..., description="Topics identified as strengths")
     practice_recommendation: str = Field(
         ..., description="AI-generated practice recommendation text"
+    )
+    average_qconf: float = Field(
+        default=0.0, description="Average Question Confidence Score across recent attempts"
+    )
+    qconf_distribution: dict = Field(
+        default_factory=lambda: {"high": 0, "medium": 0, "low": 0},
+        description="Distribution of QConf classifications",
     )

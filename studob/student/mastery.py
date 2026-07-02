@@ -1,10 +1,10 @@
 ﻿from datetime import UTC, datetime
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from studob.config.loader import Settings
-from studob.database.models import MasteryScore, Student
+from studob.database.models import Attempt, MasteryScore, Student
 from studob.exceptions import NotFoundError
 from studob.logging_setup import get_logger
 from studob.schemas.student import (
@@ -114,14 +114,24 @@ class MasteryService:
         hints_used = signals.get("hints_used_count", 0)
         retries = signals.get("retry_count", 0)
         recurrence_flag = signals.get("recurrence_flag", 0)
+        qconf_score = signals.get("qconf_score", None)
 
         time_signal = 1.0 - min(response_time_ratio, 2.0) / 2.0
+
+        qconf_boost = 0.0
+        if qconf_score is not None:
+            if qconf_score >= 0.75:
+                qconf_boost = 0.05
+            elif qconf_score < 0.45:
+                qconf_boost = -0.05
+
         signal_strength = (
             (correctness * config.correct_weight)
             + (time_signal * config.time_weight)
             - (hints_used * config.hint_penalty)
             - (retries * 0.1)
             - (recurrence_flag * config.recurrence_penalty)
+            + qconf_boost
         )
         signal_strength = max(-1.0, min(1.0, signal_strength))
 
@@ -206,3 +216,35 @@ class MasteryService:
     async def identify_weak_topics(self, student_id: str) -> list[WeakTopicInfo]:
         summary = await self.get_mastery_summary(student_id)
         return summary.weak_topics
+
+    async def get_qconf_stats(self, student_id: str) -> dict:
+        async with self._session_factory() as session:
+            session: AsyncSession
+            result = await session.execute(
+                select(Attempt.question_confidence_score)
+                .where(
+                    and_(
+                        Attempt.student_id == student_id,
+                        Attempt.question_confidence_score.isnot(None),
+                    )
+                )
+                .order_by(Attempt.answered_at.desc())
+                .limit(100)
+            )
+            scores = [row[0] for row in result.all() if row[0] is not None]
+
+        if not scores:
+            return {
+                "average_qconf": 0.0,
+                "qconf_distribution": {"high": 0, "medium": 0, "low": 0},
+            }
+
+        avg = sum(scores) / len(scores)
+        high = sum(1 for s in scores if s >= 0.75)
+        medium = sum(1 for s in scores if 0.45 <= s < 0.75)
+        low = sum(1 for s in scores if s < 0.45)
+
+        return {
+            "average_qconf": round(avg, 4),
+            "qconf_distribution": {"high": high, "medium": medium, "low": low},
+        }

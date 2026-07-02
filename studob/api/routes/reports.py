@@ -34,7 +34,6 @@ def _build_html(
     attempts,
     session_analytics,
     mastery_summary,
-    mistake_patterns,
     recommendations,
 ) -> str:
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -92,18 +91,7 @@ def _build_html(
 <td style="padding:8px 12px;border-bottom:1px solid #1a2340">{a.retry_count}</td>
 </tr>"""
 
-    mistake_rows = ""
-    for mp in mistake_patterns:
-        concepts = ", ".join(mp.common_concepts[:3])
-        mistake_rows += f"""<tr>
-<td style="padding:8px 12px;border-bottom:1px solid #1a2340">{mp.error_category}</td>
-<td style="padding:8px 12px;border-bottom:1px solid #1a2340;text-align:right">{mp.count}</td>
-<td style="padding:8px 12px;border-bottom:1px solid #1a2340;text-align:right">{mp.frequency_percent:.1f}%</td>
-<td style="padding:8px 12px;border-bottom:1px solid #1a2340">{concepts}</td>
-</tr>"""
-
-    if not mistake_rows:
-        mistake_rows = """<tr><td colspan="4" style="padding:16px;text-align:center;color:#a0a8c0">No mistakes recorded</td></tr>"""
+    mistake_rows = """<tr><td colspan="4" style="padding:16px;text-align:center;color:#a0a8c0">No mistakes recorded</td></tr>"""
 
     diff_breakdown = session_analytics.get("difficulty_breakdown", None)
     diff_rows = ""
@@ -248,16 +236,6 @@ def _build_html(
     </div>
 
     <div class="section">
-      <div class="section-title">Mistake Analysis</div>
-      <div class="card">
-        <table>
-          <thead><tr><th>Error Category</th><th style="text-align:right">Count</th><th style="text-align:right">Frequency</th><th>Common Concepts</th></tr></thead>
-          <tbody>{mistake_rows}</tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="section">
       <div class="section-title">Difficulty Breakdown</div>
       <div class="card">
         <table>
@@ -333,13 +311,11 @@ async def generate_test_report(request: Request, body: TestReportRequest):
             strengths=[],
         )
 
-    mistake_patterns = []
     recommendations = []
     try:
         student_analytics = await request.app.state.context.analytics.get_student_analytics(
             body.student_id
         )
-        mistake_patterns = student_analytics.mistake_patterns
         recommendations_text = student_analytics.practice_recommendation
         if recommendations_text:
             recommendations = [r.strip() for r in recommendations_text.split(".") if r.strip()]
@@ -348,7 +324,7 @@ async def generate_test_report(request: Request, body: TestReportRequest):
 
     html = _build_html(
         student, session, attempts, session_analytics,
-        mastery_summary, mistake_patterns, recommendations,
+        mastery_summary, recommendations,
     )
 
     return {"html": html}

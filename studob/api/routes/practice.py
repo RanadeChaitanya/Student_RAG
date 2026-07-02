@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, Request
 
+from studob.confidence import ConfidenceCalculator
 from studob.content_engine import ContentEngineService
 from studob.schemas.practice import (
     PracticeSessionRequest,
@@ -57,18 +58,31 @@ async def submit_practice_result(request: Request, practice_session_id: str, dat
     attempts_list = data.get("attempts", [])
     mastery_svc = request.app.state.context.mastery
     session_memory = request.app.state.context.session_memory
+    qconf_calculator = ConfidenceCalculator()
 
     mastery_delta = 0.0
     for attempt in attempts_list:
         subtopic = attempt.get("subtopic", "")
+        is_correct = attempt.get("is_correct", False)
+
+        qconf_result = qconf_calculator.compute(
+            is_correct=is_correct,
+            response_time_seconds=attempt.get("response_time_seconds", 30),
+            hints_used=attempt.get("hints_used", 0),
+            retry_count=attempt.get("retry_count", 0),
+            difficulty=attempt.get("difficulty", 1),
+            is_recurrence=attempt.get("is_recurrence", False),
+        )
+
         signals = {
-            "correctness": 1.0 if attempt.get("is_correct") else 0.0,
+            "correctness": 1.0 if is_correct else 0.0,
             "response_time_ratio": min(attempt.get("response_time_seconds", 30) / 30.0, 2.0),
             "hints_used_count": attempt.get("hints_used", 0),
             "retry_count": attempt.get("retry_count", 0),
             "recurrence_flag": 1 if attempt.get("is_recurrence", False) else 0,
             "subject": attempt.get("subject", ""),
             "topic": attempt.get("topic", ""),
+            "qconf_score": qconf_result.score,
         }
         if subtopic:
             updated = await mastery_svc.update_mastery(student_id, subtopic, signals)

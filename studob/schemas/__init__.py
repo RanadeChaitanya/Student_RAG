@@ -1,7 +1,6 @@
 ﻿from .analytics import (
     MasteryTrendPoint,
     MasteryTrendResponse,
-    MistakePatternSummary,
     StudentAnalyticsResponse,
 )
 from .assessment import (
@@ -84,6 +83,5 @@ __all__ = [
     "AssessmentResult",
     "MasteryTrendPoint",
     "MasteryTrendResponse",
-    "MistakePatternSummary",
     "StudentAnalyticsResponse",
 ]

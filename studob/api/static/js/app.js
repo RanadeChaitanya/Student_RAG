@@ -120,8 +120,8 @@ async function renderDashboard() {
   const weakList = mastery ? mastery.weak_topics || [] : [];
   const strongList = mastery ? mastery.strengths || [] : [];
 
-  const patterns = analytics && analytics.mistake_patterns ? analytics.mistake_patterns.slice(0, 4) : [];
   const sessions = analytics && analytics.recent_sessions ? analytics.recent_sessions.slice(0, 5) : [];
+  const avgQConf = analytics ? analytics.average_qconf || 0 : 0;
 
   el.innerHTML = `
     <div class="split">
@@ -188,12 +188,11 @@ async function renderDashboard() {
           </div>
           <div class="col">
             <div class="card">
-              <div class="card-header">Mistake Patterns</div>
-              ${patterns.length ? patterns.map(p => `
-                <div class="flex items-center justify-between" style="padding:0.35rem 0;border-bottom:1px solid var(--border-light)">
-                  <span style="text-transform:capitalize;font-size:0.84rem">${p.error_category.replace(/_/g,' ')}</span>
-                  <span><span class="badge badge-warning">${p.count}x</span> <span class="text-dim" style="font-size:0.74rem">(${fmtPct(p.frequency_percent)}%)</span></span>
-                </div>`).join('') : '<p class="text-dim">No data yet</p>'}
+              <div class="card-header">Question Confidence</div>
+              <div class="text-center">
+                ${scoreRing(avgQConf * 100, 80, '%')}
+                <p class="mt-1 text-dim" style="font-size:0.82rem">Avg QConf Score</p>
+              </div>
             </div>
             <div class="card">
               <div class="card-header">Recent Sessions</div>
@@ -843,17 +842,6 @@ async function renderDiagnosis(studentId) {
   ]);
   const weakTopics = mastery ? mastery.weak_topics || [] : [];
 
-  // Count by error category
-  const catCount = {};
-  history.forEach(h => { const c = h.error_category || 'unknown'; catCount[c] = (catCount[c] || 0) + 1; });
-  const catHtml = Object.entries(catCount).sort((a,b) => b[1]-a[1]).slice(0, 5).map(([cat, count]) => {
-    const pct = history.length ? Math.round(count/history.length*100) : 0;
-    return `<div class="mb-2">
-      <div class="flex justify-between" style="font-size:0.82rem;margin-bottom:0.25rem"><span style="text-transform:capitalize">${cat.replace(/_/g,' ')}</span><span>${count} (${pct}%)</span></div>
-      <div class="progress"><div class="progress-bar danger" style="width:${pct}%"></div></div>
-    </div>`;
-  }).join('');
-
   el.innerHTML = `
     <div class="flex items-center justify-between mb-3">
       <h2>Mistake Diagnosis</h2>
@@ -866,10 +854,6 @@ async function renderDiagnosis(studentId) {
     </div>
     <div class="row">
       <div class="col">
-        <div class="card">
-          <div class="card-header">Error Distribution</div>
-          ${catHtml || '<p class="text-dim">No mistakes recorded</p>'}
-        </div>
         <div class="card">
           <div class="card-header">Recurring Patterns</div>
           ${patterns.length ? patterns.map(p => `
@@ -996,14 +980,25 @@ async function renderAnalytics(studentId) {
       </div>
       <div class="col">
         <div class="card">
-          <div class="card-header">Mistake Patterns</div>
-          ${analytics.mistake_patterns && analytics.mistake_patterns.length
-            ? analytics.mistake_patterns.map(p => `
-              <div class="flex items-center justify-between" style="padding:0.5rem 0;border-bottom:1px solid var(--border-light)">
-                <div><span class="badge badge-warning">${p.error_category.replace(/_/g,' ')}</span><span class="text-dim" style="font-size:0.8rem"> ${(p.common_concepts || []).join(', ')}</span></div>
-                <span style="font-weight:600">${p.count}x <span class="text-dim">(${fmtPct(p.frequency_percent)}%)</span></span>
-              </div>`).join('')
-            : '<p class="text-dim">No mistake patterns yet</p>'}
+          <div class="card-header">Question Confidence</div>
+          ${analytics.average_qconf !== undefined ? `
+            <div class="text-center mb-2">
+              ${scoreRing(analytics.average_qconf * 100, 90, '%')}
+              <p class="mt-1 text-dim" style="font-size:0.82rem">Avg QConf</p>
+            </div>
+            <div class="flex justify-between" style="font-size:0.84rem;padding:0.3rem 0">
+              <span class="text-success">High</span>
+              <span>${analytics.qconf_distribution?.high || 0}</span>
+            </div>
+            <div class="flex justify-between" style="font-size:0.84rem;padding:0.3rem 0">
+              <span class="text-warning">Medium</span>
+              <span>${analytics.qconf_distribution?.medium || 0}</span>
+            </div>
+            <div class="flex justify-between" style="font-size:0.84rem;padding:0.3rem 0">
+              <span class="text-danger">Low</span>
+              <span>${analytics.qconf_distribution?.low || 0}</span>
+            </div>`
+          : '<p class="text-dim">No confidence data yet</p>'}
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 ﻿import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, desc, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from studob.confidence import ConfidenceCalculator
 from studob.database.models import Attempt, Session, Student
 from studob.exceptions import NotFoundError
 from studob.logging_setup import get_logger
@@ -15,6 +16,7 @@ logger = get_logger("student.session_memory")
 class SessionMemoryService:
     def __init__(self, session_factory):
         self._session_factory = session_factory
+        self._confidence_calculator = ConfidenceCalculator()
 
     async def start_session(self, student_id: str, session_type: str) -> SessionResponse:
         async with self._session_factory() as session:
@@ -71,6 +73,16 @@ class SessionMemoryService:
             )
             if result.scalar_one_or_none() is None:
                 raise NotFoundError("Student", sess_record.student_id)
+
+            qconf_result = self._confidence_calculator.compute(
+                is_correct=data.is_correct,
+                response_time_seconds=data.response_time_seconds,
+                hints_used=data.hints_used,
+                retry_count=data.retry_count,
+                difficulty=data.difficulty,
+                is_recurrence=data.is_recurrence,
+            )
+
             attempt = Attempt(
                 student_id=sess_record.student_id,
                 question_id=data.question_id,
@@ -81,6 +93,7 @@ class SessionMemoryService:
                 retry_count=data.retry_count,
                 answered_at=datetime.now(UTC),
                 session_id=session_id,
+                question_confidence_score=qconf_result.score,
             )
             session.add(attempt)
             sess_record.questions_count += 1
@@ -94,6 +107,8 @@ class SessionMemoryService:
                     "session_id": session_id,
                     "question_id": data.question_id,
                     "is_correct": data.is_correct,
+                    "qconf_score": qconf_result.score,
+                    "qconf_classification": qconf_result.classification,
                 },
             )
             return AttemptResponse.model_validate(attempt)
