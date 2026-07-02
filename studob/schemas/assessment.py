@@ -36,4 +36,3 @@ class AssessmentResult(BaseModel):
     incorrect: int = Field(..., description="Number of incorrect answers")
     score_percentage: float = Field(..., description="Score as percentage")
     topic_breakdown: dict = Field(..., description="Per-topic performance breakdown")
-    diagnosis_results: list[dict] = Field(..., description="Diagnosis results per incorrect answer")

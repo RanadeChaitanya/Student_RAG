@@ -45,7 +45,6 @@ async function renderPage(page) {
     else if (page.startsWith('practice-results/')) await renderPracticeResults(page.split('/')[1]);
     else if (page === 'assessment') await renderAssessment();
     else if (page.startsWith('assessment/')) await renderAssessmentDetail(page.split('/')[1]);
-    else if (page.startsWith('diagnosis/')) await renderDiagnosis(page.split('/')[1]);
     else if (page.startsWith('analytics/')) await renderAnalytics(page.split('/')[1]);
     else if (page === 'concepts') await renderConcepts();
     else renderDashboard();
@@ -172,7 +171,7 @@ async function renderDashboard() {
                     <span style="font-weight:600;color:var(--danger);font-size:0.84rem">${fmtPct(w.score)}</span>
                   </div>
                 </div>`).join('') || '<p class="text-dim">No weak topics identified</p>'}
-              ${weakList.length > 5 ? `<a href="#" onclick="navigate('#diagnosis/${selectedId}')" class="text-primary" style="font-size:0.82rem">View all ${weakList.length}</a>` : ''}
+              ${weakList.length > 5 ? `<span class="text-dim" style="font-size:0.82rem">+ ${weakList.length - 5} more</span>` : ''}
             </div>
             <div class="card">
               <div class="card-header">Strong Topics</div>
@@ -233,7 +232,6 @@ async function renderStudents() {
           <td><strong>${s.name}</strong></td>
           <td>${s.grade}</td><td>${s.board}</td><td>${s.exam_target || '-'}</td><td>${s.language}</td>
           <td>
-            <button class="btn btn-xs btn-ghost" onclick="navigate('#diagnosis/${s.id}')">Diagnose</button>
             <button class="btn btn-xs btn-ghost" onclick="navigate('#analytics/${s.id}')">Analytics</button>
             <button class="btn btn-xs btn-danger" onclick="deleteStudent('${s.id}')">Del</button>
           </td>
@@ -280,7 +278,6 @@ async function renderStudentDetail(id) {
       <div class="flex gap-1">
         <button class="btn btn-primary btn-sm" onclick="navigate('#practice')">Practice</button>
         <button class="btn btn-success btn-sm" onclick="navigate('#assessment')">Assess</button>
-        <button class="btn btn-ghost btn-sm" onclick="navigate('#diagnosis/${id}')">Diagnosis</button>
         <button class="btn btn-ghost btn-sm" onclick="navigate('#analytics/${id}')">Analytics</button>
       </div>
     </div>
@@ -828,64 +825,6 @@ async function renderAssessmentResults(id, data) {
     </div>`;
 }
 
-
-// ── DIAGNOSIS ──
-async function renderDiagnosis(studentId) {
-  const el = document.getElementById('page-diagnosis');
-  const sid = studentId || state.selectedStudentId || '';
-  if (!sid) { el.innerHTML = '<div class="alert alert-warning">Select a student first</div>'; return; }
-
-  const [history, patterns, mastery] = await Promise.all([
-    API.getMistakeHistory(sid, 50).catch(() => []),
-    API.getRecurringPatterns(sid).catch(() => []),
-    API.getMastery(sid).catch(() => null),
-  ]);
-  const weakTopics = mastery ? mastery.weak_topics || [] : [];
-
-  el.innerHTML = `
-    <div class="flex items-center justify-between mb-3">
-      <h2>Mistake Diagnosis</h2>
-      <div class="flex gap-1">
-        <select class="form-control student-selector" onchange="navigate('#diagnosis/'+this.value)">
-          <option value="">Switch Student</option>
-          ${state.students.map(s => `<option value="${s.id}" ${s.id===sid?'selected':''}>${s.name}</option>`).join('')}
-        </select>
-      </div>
-    </div>
-    <div class="row">
-      <div class="col">
-        <div class="card">
-          <div class="card-header">Recurring Patterns</div>
-          ${patterns.length ? patterns.map(p => `
-            <div class="flex items-center justify-between" style="padding:0.5rem 0;border-bottom:1px solid var(--border-light)">
-              <div><span class="badge badge-danger">${p.error_category || p.error_type || 'unknown'}</span><span class="text-dim" style="font-size:0.8rem"> ${(p.common_concepts || []).join(', ')}</span></div>
-              <span class="badge badge-warning">${p.count || 0}x</span>
-            </div>`).join('') : '<p class="text-dim">No recurring patterns found</p>'}
-        </div>
-      </div>
-      <div class="col">
-        <div class="card">
-          <div class="card-header">Weak Topics</div>
-          ${weakTopics.slice(0, 10).map(w => `
-            <div class="flex items-center justify-between" style="padding:0.35rem 0;border-bottom:1px solid var(--border-light)">
-              <span style="font-size:0.84rem">${w.subtopic} (${w.subject})</span>
-              <div class="flex items-center gap-2"><div class="progress" style="width:50px"><div class="progress-bar danger" style="width:${w.score}%"></div></div><span style="font-weight:600;color:var(--danger)">${fmtPct(w.score)}</span></div>
-            </div>`).join('') || '<p class="text-dim">No weak topics</p>'}
-          ${weakTopics.length > 10 ? `<p class="text-dim mt-1">+ ${weakTopics.length - 10} more</p>` : ''}
-        </div>
-        <div class="card">
-          <div class="card-header">Mistake History</div>
-          <div style="max-height:350px;overflow-y:auto">
-            ${history.length ? history.slice(0, 30).map(h => `
-              <div class="flex items-center justify-between" style="padding:0.35rem 0;border-bottom:1px solid var(--border-light);font-size:0.82rem">
-                <div><span class="badge badge-danger" style="font-size:0.66rem">${h.error_category}</span><span class="text-dim"> ${h.concept_tag || ''}</span></div>
-                <span class="text-dim" style="font-size:0.7rem">${h.created_at ? new Date(h.created_at).toLocaleDateString() : ''}</span>
-              </div>`).join('') : '<p class="text-dim">No mistake history yet. Complete some practice sessions.</p>'}
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
 
 // ── ANALYTICS ──
 async function renderAnalytics(studentId) {

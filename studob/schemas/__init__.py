@@ -8,12 +8,6 @@ from .assessment import (
     AssessmentResponse,
     AssessmentResult,
 )
-from .diagnosis import (
-    ErrorCategory,
-    MistakeDiagnosisRequest,
-    MistakeDiagnosisResponse,
-    MistakeRecordResponse,
-)
 from .practice import (
     PracticeQuestion,
     PracticeSessionRequest,
@@ -67,10 +61,6 @@ __all__ = [
     "SessionResponse",
     "AttemptCreate",
     "AttemptResponse",
-    "ErrorCategory",
-    "MistakeDiagnosisRequest",
-    "MistakeDiagnosisResponse",
-    "MistakeRecordResponse",
     "RetrievalRequest",
     "RetrievedItem",
     "ContextPackage",

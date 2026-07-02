@@ -10,7 +10,6 @@ from studob.api.middleware import AuthMiddleware, ErrorHandlingMiddleware, Loggi
 from studob.api.routes import (
     analytics,
     assessment,
-    diagnosis,
     graph,
     practice,
     questions,
@@ -71,7 +70,6 @@ if static_dir.exists():
 app.include_router(students.router, prefix="/api/v1/students", tags=["Students"])
 app.include_router(questions.router, prefix="/api/v1/questions", tags=["Questions"])
 app.include_router(sessions.router, prefix="/api/v1/sessions", tags=["Sessions"])
-app.include_router(diagnosis.router, prefix="/api/v1/diagnosis", tags=["Diagnosis"])
 app.include_router(retrieval.router, prefix="/api/v1/retrieval", tags=["Retrieval"])
 app.include_router(graph.router, prefix="/api/v1/graph", tags=["Concept Graph"])
 app.include_router(practice.router, prefix="/api/v1/practice", tags=["Practice"])

@@ -36,9 +36,6 @@ class Student(Base):
     sessions: Mapped[list["Session"]] = relationship(
         "Session", back_populates="student", cascade="all, delete-orphan"
     )
-    mistake_records: Mapped[list["MistakeRecord"]] = relationship(
-        "MistakeRecord", back_populates="student", cascade="all, delete-orphan"
-    )
 
     def __repr__(self) -> str:
         return f"<Student(id={self.id!r}, name={self.name!r}, grade={self.grade!r})>"
@@ -145,25 +142,6 @@ class Session(Base):
 
     def __repr__(self) -> str:
         return f"<Session(id={self.id!r}, student_id={self.student_id!r}, session_type={self.session_type!r})>"  # noqa: E501
-
-
-class MistakeRecord(Base):
-    __tablename__ = "mistake_records"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    student_id: Mapped[str] = mapped_column(String(36), ForeignKey("students.id"), nullable=False)
-    question_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    error_category: Mapped[str] = mapped_column(String(100), nullable=False)
-    concept_tag: Mapped[str] = mapped_column(String(255), nullable=False)
-    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    diagnosis_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-    student: Mapped["Student"] = relationship("Student", back_populates="mistake_records")
-
-    def __repr__(self) -> str:
-        return f"<MistakeRecord(id={self.id}, student_id={self.student_id!r}, error_category={self.error_category!r}, concept_tag={self.concept_tag!r})>"  # noqa: E501
 
 
 class ConceptNode(Base):

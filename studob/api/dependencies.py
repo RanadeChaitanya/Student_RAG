@@ -11,12 +11,6 @@ from studob.assessment import AnswerEvaluator, AnswerTagger, AssessmentEngine
 from studob.config.loader import Settings, get_config
 from studob.content_engine import ContentEngineService
 from studob.database.engine import DatabaseEngine
-from studob.diagnosis import (
-    ConceptTagger,
-    DiagnosisEngine,
-    ErrorTypeRegistry,
-    RootCauseClassifier,
-)
 from studob.embeddings import EmbeddingGenerator, EmbeddingService, VectorStoreService
 from studob.graph import ConceptGraphService
 from studob.graph.store import ConceptGraphStore
@@ -45,7 +39,6 @@ class AppContext:
         self.metadata_filter: MetadataFilterService | None = None
         self.embedding: EmbeddingService | None = None
         self.concept_graph: ConceptGraphService | None = None
-        self.diagnosis: DiagnosisEngine | None = None
         self.retrieval: RetrievalOrchestrator | None = None
         self.content_engine: ContentEngineService | None = None
         self.assessment: AssessmentEngine | None = None
@@ -80,18 +73,6 @@ class AppContext:
 
         concept_graph_store = ConceptGraphStore(settings.database.graph.data_path)
         self.concept_graph = ConceptGraphService(concept_graph_store, settings, session_factory)
-
-        error_type_registry = ErrorTypeRegistry()
-        concept_tagger = ConceptTagger(self.app_questions)
-        root_cause_classifier = RootCauseClassifier(settings)
-        self.diagnosis = DiagnosisEngine(
-            classifier=root_cause_classifier,
-            tagger=concept_tagger,
-            registry=error_type_registry,
-            session_factory=session_factory,
-            app_question_service=self.app_questions,
-            test_question_service=self.test_questions,
-        )
 
         metadata_filter_module = MetadataFilterModule(self.metadata_filter)
         semantic_retrieval = SemanticRetrievalModule(self.embedding)
@@ -194,10 +175,6 @@ async def get_embedding_service(request: Request) -> AsyncGenerator[EmbeddingSer
 
 async def get_concept_graph_service(request: Request) -> AsyncGenerator[ConceptGraphService, None]:
     yield request.app.state.context.concept_graph
-
-
-async def get_diagnosis_engine(request: Request) -> AsyncGenerator[DiagnosisEngine, None]:
-    yield request.app.state.context.diagnosis
 
 
 async def get_retrieval_orchestrator(

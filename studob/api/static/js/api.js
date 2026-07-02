@@ -40,13 +40,6 @@ const API = {
   getActiveSessions(studentId) { return this.request('GET', `/sessions/student/${studentId}/active`); },
   getStudentSessions(studentId) { return this.request('GET', `/sessions/student/${studentId}/all`); },
 
-  // Diagnosis
-  diagnose(data) { return this.request('POST', '/diagnosis/diagnose', data); },
-  getMistakeHistory(studentId, limit) {
-    return this.request('GET', `/diagnosis/student/${studentId}/history?limit=${limit || 20}`);
-  },
-  getRecurringPatterns(studentId) { return this.request('GET', `/diagnosis/student/${studentId}/patterns`); },
-
   // Retrieval
   retrieve(data) { return this.request('POST', '/retrieval/retrieve', data); },
 

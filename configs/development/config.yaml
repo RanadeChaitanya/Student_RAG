@@ -57,9 +57,5 @@ assessment:
   max_questions_per_assessment: 15
   time_limit_minutes: 60
 
-diagnosis:
-  enabled: true
-  min_confidence: 0.4
-
 analytics:
   trend_window_days: 30

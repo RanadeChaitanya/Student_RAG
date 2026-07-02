@@ -231,7 +231,6 @@ class AssessmentEngine:
             incorrect=incorrect,
             score_percentage=score_percentage,
             topic_breakdown=topic_breakdown,
-            diagnosis_results=[],
         )
 
         logger.info(

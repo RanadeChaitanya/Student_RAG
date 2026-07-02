@@ -55,22 +55,7 @@ async def test_workflow_api(api_client):
     assert r.status_code == 200
     assert "overall_score" in r.json()
 
-    # 6. Diagnose a mistake
-    r = await c.post(
-        "/api/v1/diagnosis/diagnose",
-        json={
-            "student_id": sid,
-            "question_id": 1,
-            "question_type": "app",
-            "response_text": "wrong",
-            "response_time_seconds": 30.0,
-            "hints_used": 0,
-            "session_id": sess,
-        },
-    )
-    assert r.status_code == 200
-
-    # 7. Retrieve learning context
+    # 6. Retrieve learning context
     r = await c.post(
         "/api/v1/retrieval/retrieve",
         json={
@@ -82,7 +67,7 @@ async def test_workflow_api(api_client):
     )
     assert r.status_code == 200
 
-    # 8. Generate practice session
+    # 7. Generate practice session
     r = await c.post(
         "/api/v1/practice/generate",
         json={
@@ -95,7 +80,7 @@ async def test_workflow_api(api_client):
     )
     assert r.status_code == 200
 
-    # 9. Get valid test question IDs first
+    # 8. Get valid test question IDs first
     r = await c.get("/api/v1/questions/test")
     assert r.status_code == 200
     all_test_qs = r.json()
@@ -103,7 +88,7 @@ async def test_workflow_api(api_client):
     test_q_ids = [q["id"] for q in all_test_qs[:2]]
     assert len(test_q_ids) == 2
 
-    # 10. Create an assessment
+    # 9. Create an assessment
     r = await c.post(
         "/api/v1/assessment/",
         json={

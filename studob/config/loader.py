@@ -79,11 +79,6 @@ class AssessmentSettings(BaseSettings):
     time_limit_minutes: int = 60
 
 
-class DiagnosisSettings(BaseSettings):
-    enabled: bool = True
-    min_confidence: float = 0.4
-
-
 class AnalyticsSettings(BaseSettings):
     trend_window_days: int = 30
 
@@ -95,7 +90,6 @@ class Settings(BaseSettings):
     retrieval: RetrievalSettings = RetrievalSettings()
     content_engine: ContentEngineSettings = ContentEngineSettings()
     assessment: AssessmentSettings = AssessmentSettings()
-    diagnosis: DiagnosisSettings = DiagnosisSettings()
     analytics: AnalyticsSettings = AnalyticsSettings()
 
     model_config = {"env_nested_delimiter": "__"}
